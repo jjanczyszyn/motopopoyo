@@ -1,6 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<!-- GA opt-out: visit ?ga_optout=1 to disable analytics in this browser, ?ga_optout=0 to re-enable -->
+<script>
+  (function () {
+    var KEY = 'ga_optout', ID = 'G-ER1JWFY44B';
+    try {
+      var p = new URLSearchParams(location.search);
+      if (p.has(KEY)) {
+        if (p.get(KEY) === '0') localStorage.removeItem(KEY);
+        else localStorage.setItem(KEY, '1');
+      }
+      if (localStorage.getItem(KEY) === '1') window['ga-disable-' + ID] = true;
+    } catch (e) {}
+  })();
+</script>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-ER1JWFY44B"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-ER1JWFY44B');
+</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -47,5 +69,20 @@
 <body>
 <div id="root"></div>
 <script type="module" src="/src/main.tsx"></script>
+<script>
+  // Track reach-outs and bookings as GA4 events.
+  document.addEventListener('click', function (e) {
+    var link = e.target.closest('a[href]');
+    if (!link || typeof gtag !== 'function') return;
+    var href = link.getAttribute('href') || '';
+    if (href.indexOf('wa.me') > -1 || href.indexOf('api.whatsapp') > -1 || link.hasAttribute('data-wa')) {
+      gtag('event', 'whatsapp_click', { link_url: href });
+    } else if (href.indexOf('mailto:') === 0) {
+      gtag('event', 'email_click', { link_url: href });
+    } else if (href.indexOf('tel:') === 0) {
+      gtag('event', 'tel_click', { link_url: href });
+    }
+  });
+</script>
 </body>
 </html>
