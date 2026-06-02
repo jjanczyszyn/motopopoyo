@@ -21,6 +21,13 @@
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
+  gtag('consent', 'default', {
+    ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied', analytics_storage: 'denied',
+    wait_for_update: 500,
+    region: ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE','IS','LI','NO','GB','CH']
+  });
+  var __gc = localStorage.getItem('ga_consent');
+  if (__gc === 'granted' || __gc === 'denied') gtag('consent', 'update', { ad_storage: __gc, ad_user_data: __gc, ad_personalization: __gc, analytics_storage: __gc });
   gtag('config', 'G-ER1JWFY44B');
 </script>
 <meta charset="UTF-8" />
@@ -83,6 +90,35 @@
       gtag('event', 'tel_click', { link_url: href });
     }
   });
+</script>
+<script>
+  // EU cookie consent banner (GA4 Consent Mode). Shown until the visitor chooses.
+  (function () {
+    if (localStorage.getItem('ga_consent')) return;
+    function choose(v) {
+      try { localStorage.setItem('ga_consent', v); } catch (e) {}
+      if (typeof gtag === 'function') gtag('consent', 'update', { ad_storage: v, ad_user_data: v, ad_personalization: v, analytics_storage: v });
+      var el = document.getElementById('ga-consent'); if (el) el.remove();
+    }
+    function show() {
+      if (document.getElementById('ga-consent')) return;
+      var bar = document.createElement('div');
+      bar.id = 'ga-consent';
+      bar.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:2147483647;background:#111;color:#fff;font:14px/1.5 system-ui,-apple-system,sans-serif;padding:14px 18px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:center';
+      bar.innerHTML = '<span style="max-width:620px">This site uses cookies for analytics. You can accept or decline \u2014 declining keeps your visit cookieless.</span>';
+      var ok = document.createElement('button');
+      ok.textContent = 'Accept';
+      ok.style.cssText = 'cursor:pointer;border:0;border-radius:6px;padding:9px 20px;font:inherit;font-weight:600;background:#fff;color:#111';
+      var no = document.createElement('button');
+      no.textContent = 'Decline';
+      no.style.cssText = 'cursor:pointer;border:1px solid rgba(255,255,255,.45);border-radius:6px;padding:9px 20px;font:inherit;background:transparent;color:#fff';
+      ok.onclick = function () { choose('granted'); };
+      no.onclick = function () { choose('denied'); };
+      bar.appendChild(ok); bar.appendChild(no);
+      (document.body || document.documentElement).appendChild(bar);
+    }
+    if (document.body) show(); else document.addEventListener('DOMContentLoaded', show);
+  })();
 </script>
 </body>
 </html>
