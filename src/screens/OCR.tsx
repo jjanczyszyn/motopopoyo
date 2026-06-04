@@ -39,12 +39,19 @@ export function OCRScreen({
 
     try {
       // Run OCR client-side. Upload to Convex storage in parallel for audit.
+      // The audit upload is best-effort: a failure here must NOT discard a good
+      // OCR result, so we swallow errors and fall back to a null storageId.
       const uploadPromise = (async () => {
-        const url = await generateUploadUrl({});
-        const res = await fetch(url, { method: "POST", body: f });
-        if (!res.ok) return null;
-        const { storageId } = (await res.json()) as { storageId: string };
-        return storageId;
+        try {
+          const url = await generateUploadUrl({});
+          const res = await fetch(url, { method: "POST", body: f });
+          if (!res.ok) return null;
+          const { storageId } = (await res.json()) as { storageId: string };
+          return storageId;
+        } catch (err) {
+          console.warn("audit image upload failed; keeping OCR result", err);
+          return null;
+        }
       })();
 
       // Two-pass on-device pipeline (preprocess → OCR-B MRZ pass → eng visual
