@@ -6,7 +6,7 @@ import { StepHeader, ProgressBar, PrimaryButton, Field } from "../components/Com
 import { ExpiryField } from "../components/ExpiryField";
 import { CountrySelect } from "../components/CountrySelect";
 import { IconCheck, IconUpload, IconRefresh } from "../components/Icons";
-import { parseDocumentText } from "../lib/ocrParse";
+import { recognizeDocument } from "../lib/ocrEngine";
 import { useI18n } from "../i18n/I18nContext";
 
 type Phase = "idle" | "scanning" | "manual" | "done";
@@ -47,17 +47,9 @@ export function OCRScreen({
         return storageId;
       })();
 
-      const { default: Tesseract } = await import("tesseract.js");
-      // PSM 6 (single uniform block) keeps the MRZ on two readable lines
-      // rather than fragmenting it the way the default auto-detection does.
-      const result = await Tesseract.recognize(f, "eng", {
-        logger: (m: { status: string; progress: number }) => {
-          if (m.status === "recognizing text") setProgress(Math.round(m.progress * 100));
-        },
-        tessedit_pageseg_mode: "6",
-      } as Parameters<typeof Tesseract.recognize>[2]);
-      const text = result?.data?.text ?? "";
-      const parsed = parseDocumentText(text);
+      // Two-pass on-device pipeline (preprocess → OCR-B MRZ pass → eng visual
+      // pass → parse). See src/lib/ocrEngine.ts.
+      const { text, parsed } = await recognizeDocument(f, setProgress);
       const storageId = await uploadPromise;
 
       if (!parsed.firstName && !parsed.docNumber && !parsed.expiryISO) {

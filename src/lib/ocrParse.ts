@@ -54,6 +54,18 @@ const ISO3_TO_NAME: Record<string, string> = {
   NOR: "Norway",
   FIN: "Finland",
   POL: "Poland",
+  CZE: "Czech Republic",
+  SVK: "Slovakia",
+  HUN: "Hungary",
+  ROU: "Romania",
+  BGR: "Bulgaria",
+  HRV: "Croatia",
+  SVN: "Slovenia",
+  LUX: "Luxembourg",
+  ISL: "Iceland",
+  EST: "Estonia",
+  LVA: "Latvia",
+  LTU: "Lithuania",
   GRC: "Greece",
   BRA: "Brazil",
   ARG: "Argentina",
@@ -148,7 +160,135 @@ function pad(s: string, n: number): string {
 // fillers (some German passports encode country as "D<<").
 function resolveCountry(code: string): string {
   const stripped = code.replace(/<+/g, "");
-  return ISO3_TO_NAME[stripped] ?? "";
+  if (ISO3_TO_NAME[stripped]) return ISO3_TO_NAME[stripped];
+  // OCR digit↔letter confusion inside the code, e.g. "1TA"→"ITA", "DELI"→…
+  return ISO3_TO_NAME[lettersFromDigits(stripped)] ?? "";
+}
+
+// ---------------------------------------------------------------------------
+// ICAO 9303 check digits + OCR-confusion repair
+//
+// The MRZ carries check digits (mod-10, weights 7-3-1) on the document number,
+// date of birth, expiry, and a final composite. They give built-in error
+// correction: when Tesseract garbles a character we can detect it (check digit
+// no longer matches) and often repair it by trying the handful of glyphs the
+// real character is commonly confused with. This is the single biggest
+// reliability lever for machine-readable documents and is why we prefer the
+// MRZ over the printed visual zone.
+// ---------------------------------------------------------------------------
+
+const MRZ_WEIGHTS = [7, 3, 1];
+
+function mrzCharValue(c: string): number {
+  if (c >= "0" && c <= "9") return c.charCodeAt(0) - 48;
+  if (c >= "A" && c <= "Z") return c.charCodeAt(0) - 55; // A=10 … Z=35
+  return 0; // "<" filler and anything else
+}
+
+export function mrzCheckDigit(field: string): number {
+  let sum = 0;
+  for (let i = 0; i < field.length; i++) {
+    sum += mrzCharValue(field[i]) * MRZ_WEIGHTS[i % 3];
+  }
+  return sum % 10;
+}
+
+// Glyphs Tesseract routinely swaps in MRZ/OCR-B text. Symmetric where it
+// matters; only pairs that actually occur (no "K", which is a real letter we
+// must not treat as "<").
+const CONFUSIONS: Record<string, string[]> = {
+  // The rounded OCR-B glyphs 0/O/D/Q/G/B are all mutually confused by Tesseract.
+  "0": ["O", "D", "Q", "G", "B"],
+  O: ["0", "D", "Q", "G"],
+  D: ["0", "O"],
+  Q: ["0", "O"],
+  G: ["6", "0", "O"],
+  B: ["8", "0"],
+  "1": ["I", "L", "T"],
+  I: ["1", "L", "T"],
+  L: ["1", "I"],
+  T: ["1", "I", "7"],
+  "2": ["Z"],
+  Z: ["2"],
+  "5": ["S"],
+  S: ["5"],
+  "8": ["B"],
+  "6": ["G"],
+  "7": ["T"],
+};
+
+// Normalise a country/nationality code by pushing common digit misreads back to
+// their letters (codes are always alphabetic), e.g. "1TA"→"ITA", "5WE"→"SWE".
+function lettersFromDigits(code: string): string {
+  const map: Record<string, string> = { "0": "O", "1": "I", "5": "S", "8": "B", "2": "Z", "6": "G", "7": "T" };
+  return code.replace(/[0-9]/g, (d) => map[d] ?? d);
+}
+
+// Given an OCR'd field and the expected check character (which may itself be
+// misread), return the variant of `field` whose check digit is internally
+// consistent — trying up to `maxEdits` confusion substitutions. Returns null
+// when nothing reconciles, so callers can fall back to the raw slice.
+function repairToCheckDigit(field: string, checkChar: string, maxEdits = 3): string | null {
+  const targets = new Set<number>();
+  // The check char can be a digit, or a digit misread as a letter ("0"→"O").
+  if (/[0-9]/.test(checkChar)) targets.add(parseInt(checkChar, 10));
+  const asDigit = lettersFromDigits(checkChar);
+  if (/[0-9]/.test(asDigit)) targets.add(parseInt(asDigit, 10));
+  if (targets.size === 0) for (let d = 0; d <= 9; d++) targets.add(d); // unknown → accept any
+
+  if (targets.has(mrzCheckDigit(field))) return field;
+
+  // BFS over confusion substitutions, fewest edits first.
+  let frontier = [field];
+  const seen = new Set([field]);
+  for (let edit = 0; edit < maxEdits; edit++) {
+    const next: string[] = [];
+    for (const cand of frontier) {
+      for (let i = 0; i < cand.length; i++) {
+        const alts = CONFUSIONS[cand[i]];
+        if (!alts) continue;
+        for (const a of alts) {
+          const repl = cand.slice(0, i) + a + cand.slice(i + 1);
+          if (seen.has(repl)) continue;
+          seen.add(repl);
+          if (targets.has(mrzCheckDigit(repl))) return repl;
+          next.push(repl);
+        }
+      }
+    }
+    frontier = next;
+  }
+  return null;
+}
+
+// Map a single check-digit character back to a digit, tolerating OCR rendering
+// it as a confusable letter (Tesseract emits "0"→"O", "5"→"S", etc.).
+const DIGIT_FROM_LETTER: Record<string, string> = {
+  O: "0", D: "0", Q: "0", I: "1", L: "1", T: "7", Z: "2", S: "5", B: "8", G: "6",
+};
+function asCheckDigit(c: string): number | null {
+  if (/^[0-9]$/.test(c)) return parseInt(c, 10);
+  const d = DIGIT_FROM_LETTER[c];
+  return d != null ? parseInt(d, 10) : null;
+}
+
+// Is `field`'s own check digit internally consistent? Used to decide whether an
+// MRZ is a genuine ICAO document (whose check digits we can trust for repair)
+// versus synthetic/garbled text where the check digits are meaningless.
+function mrzFieldValid(field: string, checkChar: string): boolean {
+  const d = asCheckDigit(checkChar);
+  return d != null && mrzCheckDigit(field) === d;
+}
+
+// Extract a document number from a 9-char MRZ slot + its check char. Confusion
+// repair is only attempted when `trustCheck` is true — i.e. the surrounding MRZ
+// has at least one other valid check digit, proving it's a real document with a
+// reliable doc-number check digit. Otherwise we return the raw slice, so we
+// never "correct" a synthetic or wholly garbled MRZ into a plausible-but-wrong
+// number.
+function repairDocNumber(slot9: string, checkChar: string, trustCheck: boolean): string {
+  const repaired = (trustCheck ? repairToCheckDigit(slot9, checkChar) : null) ?? slot9;
+  return repaired.replace(/</g, "").trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -189,9 +329,54 @@ function findCountryInHead(
 function findCountryInLine2(line: string): { code: string; pos: number } | null {
   for (let i = 5; i <= Math.min(13, line.length - 3); i++) {
     const slot = line.slice(i, i + 3);
-    if (ISO3_TO_NAME[slot] && slot.length === 3) return { code: slot, pos: i };
+    if (slot.length < 3) break;
+    if (ISO3_TO_NAME[slot]) return { code: slot, pos: i };
+    if (slot === "D<<") return { code: "D", pos: i }; // German single-letter nationality
+    // Digit↔letter confusion in the nationality code, e.g. "1TA"→"ITA".
+    const fixed = lettersFromDigits(slot);
+    if (fixed !== slot && ISO3_TO_NAME[fixed]) return { code: fixed, pos: i };
   }
   return null;
+}
+
+// Does line 2 structurally look like a TD3 second line, even when the
+// nationality code is unknown/fictional (e.g. specimen "UTO") or too garbled to
+// match? Pattern: 9-char doc-number slot, a check char, a 3-char nationality,
+// then a 6-digit DOB. Tolerant of OCR filler-as-letter noise in the doc slot.
+function looksLikeTD3Line2(line: string): boolean {
+  return /^[A-Z0-9<]{9}[0-9A-Z<][A-Z0-9<]{3}\d{5}/.test(line.slice(0, 24));
+}
+
+// How much does this line look like a genuine TD3 second line? Line 2 carries
+// every structured field (doc number, nationality, DOB, expiry) plus their
+// check digits, so it is far more reliable to anchor on than the OCR-noisy
+// line 1. We score candidates by how many check digits validate; the winner's
+// preceding "<<" line supplies the names.
+function scoreTD3Line2(line: string): number {
+  const c2 = findCountryInLine2(line);
+  if (!c2 && !looksLikeTD3Line2(line)) return 0;
+  const offset = c2 ? c2.pos - 10 : 0;
+  if (offset < 0) return 0;
+  // A genuine line 2 carries two 6-digit date runs (DOB then expiry) at fixed
+  // offsets. When the nationality isn't a recognised country code we demand
+  // BOTH date runs — that's what separates a real passport line from a name
+  // line with a stray country trigram ("ARENAS"→"ARE") or a non-ICAO machine
+  // line (a French driving licence, an ID-card front) that has only one
+  // date-shaped run and a coincidentally-valid check digit.
+  const dobDigits = /^\d{6}$/.test(line.slice(offset + 13, offset + 19));
+  const expDigits = /^\d{6}$/.test(line.slice(offset + 21, offset + 27));
+  // Always need at least one date run — rejects a name line that merely
+  // contains a country trigram ("ARENAS"→"ARE"/UAE) but no dates.
+  if (!dobDigits && !expDigits) return 0;
+  // Without a recognised country, demand BOTH date runs — rejects non-ICAO
+  // machine lines (French DL, ID-card fronts) that have one date-shaped run
+  // and a coincidentally-valid check digit.
+  if (!c2 && !(dobDigits && expDigits)) return 0;
+  const docV = mrzFieldValid(line.slice(offset, offset + 9), line.slice(offset + 9, offset + 10));
+  const dobV = mrzFieldValid(line.slice(offset + 13, offset + 19), line.slice(offset + 19, offset + 20));
+  const expV = mrzFieldValid(line.slice(offset + 21, offset + 27), line.slice(offset + 27, offset + 28));
+  return (c2 ? 3 : 0) + (dobDigits ? 1 : 0) + (expDigits ? 1 : 0) +
+    (docV ? 2 : 0) + (dobV ? 2 : 0) + (expV ? 2 : 0);
 }
 
 function findTD3Pair(text: string): [string, string] | null {
@@ -200,31 +385,29 @@ function findTD3Pair(text: string): [string, string] | null {
     .map(normaliseMrzLine)
     .filter((l) => l.length >= 20);
 
-  for (let i = 0; i < lines.length - 1; i++) {
-    const a = lines[i];
-    let b = lines[i + 1];
-    // Line 1 must carry a country code in the prefix and a "<<" separator
-    // somewhere AFTER the country slot (not inside Germany's "D<<" filler).
-    const country = findCountryInHead(a, 6);
-    if (!country) continue;
-    const afterCountry = country.pos + 3;
-    if (a.slice(afterCountry).indexOf("<<") < 0) continue;
-    // Line 2 must contain a country code in the TD3 nationality window
-    // (positions 5..13). This rejects TD1 line 2 (which has nationality at
-    // position 15) and visual-zone numerics that happen to follow a name.
-    let l2Country = findCountryInLine2(b);
-    // Sometimes OCR splits line 2 across two output lines — try stitching.
-    if (!l2Country && i + 2 < lines.length) {
-      const stitched = b + lines[i + 2];
-      if (findCountryInLine2(stitched)) {
-        b = stitched;
-        l2Country = findCountryInLine2(b);
-      }
+  let bestIdx = -1;
+  let bestScore = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const s = scoreTD3Line2(lines[i]);
+    if (s > bestScore) {
+      bestScore = s;
+      bestIdx = i;
     }
-    if (!l2Country) continue;
-    return [pad(a, 44), pad(b, 44)];
   }
-  return null;
+  // Minimum confidence to declare a TD3 line 2. A recognised nationality scores
+  // 3 on its own; a fictional/garbled nationality needs corroborating valid
+  // check digits to reach the bar. This keeps driver's licences and ID-card
+  // fronts (which have date-shaped digit runs but no country and no valid check
+  // digits) out of the MRZ path so they fall through to the visual zone.
+  if (bestScore < 3) return null;
+
+  // Line 1 (names): the nearest preceding line carrying a "<<" separator,
+  // falling back to the immediately preceding line.
+  let line1 = bestIdx > 0 ? lines[bestIdx - 1] : "";
+  for (let j = bestIdx - 1; j >= Math.max(0, bestIdx - 2); j--) {
+    if (lines[j].includes("<<")) { line1 = lines[j]; break; }
+  }
+  return [pad(line1, 44), pad(lines[bestIdx], 44)];
 }
 
 function parseTD3(text: string): ParsedDocument | null {
@@ -232,13 +415,15 @@ function parseTD3(text: string): ParsedDocument | null {
   if (!pair) return null;
   const [line1, line2] = pair;
 
+  // Country from line 1 if we can read it there, else (line 1 too garbled to
+  // locate the code) we fall back to the line-2 nationality below.
   const detected = findCountryInHead(line1, 6);
-  if (!detected) return null;
-  let country = ISO3_TO_NAME[detected.code] ?? "";
+  let country = detected ? ISO3_TO_NAME[detected.code] ?? "" : "";
 
-  // Surname starts after the 3-char country slot. Searching for "<<" from
-  // there sidesteps Germany's "D<<" filler.
-  const surnameStart = detected.pos + 3;
+  // Surname starts after the 3-char country slot. When line 1's country is
+  // unreadable, assume the standard "P<XXX" 5-char prefix so we can still split
+  // names on the "<<" separator.
+  const surnameStart = detected ? detected.pos + 3 : 5;
   const sepRel = line1.slice(surnameStart).indexOf("<<");
   let lastName = "";
   let firstName = "";
@@ -249,21 +434,24 @@ function parseTD3(text: string): ParsedDocument | null {
   }
 
   // Line 2 — anchor on the country code so OCR shifts (dropped leading
-  // digits etc.) don't break field offsets.
+  // digits etc.) don't break field offsets. When the nationality is unknown
+  // (fictional "UTO", or too garbled to look up) fall back to the standard
+  // offset 0. The 9-char doc-number slot and its check digit are reconciled via
+  // confusion repair so single-char OCR errors (0↔O, I↔1, D↔0) are corrected.
   let docNumber = "";
   let expiryISO = "";
   const c2 = findCountryInLine2(line2);
-  if (c2) {
-    if (!country) country = ISO3_TO_NAME[c2.code] ?? "";
-    const offset = c2.pos - 10;
-    const docStart = Math.max(0, offset);
-    const docEnd = Math.max(0, offset + 9);
-    docNumber = line2.slice(docStart, docEnd).replace(/</g, "").trim();
-    expiryISO = mrzExpiryToISO(line2.slice(offset + 21, offset + 27));
-  } else {
-    docNumber = line2.slice(0, 9).replace(/</g, "").trim();
-    expiryISO = mrzExpiryToISO(line2.slice(21, 27));
-  }
+  const offset = c2 ? c2.pos - 10 : 0;
+  if (c2 && !country) country = ISO3_TO_NAME[c2.code] ?? "";
+  const docStart = Math.max(0, offset);
+  const docSlot = line2.slice(docStart, docStart + 9);
+  const docCheck = line2.slice(docStart + 9, docStart + 10);
+  expiryISO = mrzExpiryToISO(line2.slice(offset + 21, offset + 27));
+  // Trust the doc-number check digit only if the DOB or expiry check validates,
+  // i.e. this is a genuine ICAO MRZ rather than synthetic/garbled text.
+  const dobValid = mrzFieldValid(line2.slice(offset + 13, offset + 19), line2.slice(offset + 19, offset + 20));
+  const expValid = mrzFieldValid(line2.slice(offset + 21, offset + 27), line2.slice(offset + 27, offset + 28));
+  docNumber = repairDocNumber(docSlot, docCheck, dobValid && expValid);
 
   if (!docNumber && !expiryISO && !lastName) return null;
 
@@ -297,15 +485,17 @@ function findTD1Triple(text: string): [string, string, string] | null {
 
   // We need three consecutive plausible TD1 lines. Heuristics:
   //   line 1: starts with I, A, or C; mostly letters/digits/<
-  //   line 2: starts with 6 digits (DOB)
-  //   line 3: contains "<<" and is mostly letters
+  //   line 2: DOB(6) + check + sex + expiry(6) → two 6-digit runs near the start
+  //   line 3: the name line — letters plus "<" fillers. We do NOT require "<<"
+  //           because Tesseract often renders the "<<" separator as "<K<"
+  //           (K is a real letter we deliberately don't fold into "<").
   for (let i = 0; i < lines.length - 2; i++) {
     const a = lines[i];
     const b = lines[i + 1];
     const c = lines[i + 2];
     if (!/^[IAC][A-Z<]/.test(a)) continue;
-    if (!/^\d{6}/.test(b)) continue;
-    if (!c.includes("<<")) continue;
+    if (!/^\d{6}[0-9A-Z<]{1,2}\d{5}/.test(b)) continue;
+    if (!(c.includes("<") && (c.match(/[A-Z]/g)?.length ?? 0) >= 4)) continue;
     return [pad(a, 30), pad(b, 30), pad(c, 30)];
   }
   return null;
@@ -334,13 +524,19 @@ function parseTD1(text: string): ParsedDocument | null {
   // Country at chars 2..5 (might be "D<<" for older German cards).
   const country = resolveCountry(line1.slice(2, 5));
 
-  // Document number at chars 5..14. Tesseract sometimes pads with "<".
-  const docNumber = line1.slice(5, 14).replace(/</g, "").trim();
-
   // Expiry at chars 8..14 of line 2 (YYMMDD).
   const expiryISO = mrzExpiryToISO(line2.slice(8, 14));
 
-  // Names on line 3.
+  // Document number at chars 5..14 (9-char slot) + check digit at 14. Trust the
+  // check digit for repair only when the DOB or expiry check (line 2) validates.
+  const dobValid = mrzFieldValid(line2.slice(0, 6), line2.slice(6, 7));
+  const expValid = mrzFieldValid(line2.slice(8, 14), line2.slice(14, 15));
+  const docNumber = repairDocNumber(line1.slice(5, 14), line1.slice(14, 15), dobValid && expValid);
+
+  // Names on line 3. Primary path splits on the "<<" surname/given separator.
+  // Fallback (when OCR ate the separator into "<K<" so no "<<" survives): split
+  // on runs of "<", take the first token as surname and the next ≥2-char token
+  // as the given name, skipping single-char noise tokens.
   const names = line3.replace(/<+$/, "");
   const sepIdx = names.indexOf("<<");
   let lastName = "";
@@ -349,7 +545,10 @@ function parseTD1(text: string): ParsedDocument | null {
     lastName = names.slice(0, sepIdx).replace(/</g, " ").trim();
     firstName = names.slice(sepIdx + 2).replace(/</g, " ").trim();
   } else {
-    lastName = names.replace(/</g, " ").trim();
+    const tokens = names.split(/<+/).filter((t) => t.length > 0);
+    if (tokens.length > 0) lastName = tokens[0];
+    const given = tokens.slice(1).find((t) => t.length >= 2);
+    if (given) firstName = given;
   }
 
   if (!docNumber && !expiryISO && !lastName) return null;
@@ -398,6 +597,10 @@ const MONTHS: Record<string, number> = {
 // Build an ISO date from three numeric/textual parts. Validates the calendar.
 function buildISODate(yyyy: number, mm: number, dd: number): string {
   if (!yyyy || !mm || !dd || mm > 12 || dd > 31) return "";
+  // Reject implausible years (OCR garbage like a 3-digit "203"). Documents in
+  // scope carry dates of birth back to the early 1900s and expiries out a
+  // couple of decades; anything outside that is noise.
+  if (yyyy < 1900 || yyyy > 2100) return "";
   const date = new Date(yyyy, mm - 1, dd);
   if (date.getFullYear() !== yyyy || date.getMonth() !== mm - 1 || date.getDate() !== dd) {
     return "";

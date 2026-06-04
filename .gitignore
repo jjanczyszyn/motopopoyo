@@ -15,3 +15,9 @@ tests-local/
 *.private.test.ts
 *.private.test.tsx
 fixtures-private/
+
+# OCR harness: regenerable preprocessed debug images
+fixtures/preprocessed/
+
+# tesseract.js decompresses model caches into CWD when the harness runs
+/*.traineddata

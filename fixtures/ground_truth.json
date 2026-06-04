@@ -1,0 +1,83 @@
+{
+  "_README": "Ground truth for the OCR accuracy harness. Fields are what a human reads off each SPECIMEN document. All images are public government/EU specimens or Wikimedia samples with fake identities — NO real customer PII (see fixtures/README.md for sources + licenses). docNumber/expiryISO/country are scored by exact match; firstName/lastName by normalized edit distance (diacritics intentionally kept in truth so MRZ-ASCII output is penalized but not failed).",
+  "documents": [
+    {
+      "image": "usa_passport.jpg",
+      "type": "passport", "mrz": "td3", "country_code": "USA",
+      "notes": "US State Dept 'Happy Traveler' specimen (CANCELLED). Surname/given swapped-looking but correct.",
+      "fields": { "firstName": "Happy", "lastName": "Traveler", "docNumber": "340007237", "expiryISO": "2016-08-07", "country": "United States" }
+    },
+    {
+      "image": "deu_passport.png",
+      "type": "passport", "mrz": "td3", "country_code": "D",
+      "notes": "German Reisepass 'Erika Mustermann' specimen, MUSTER watermark + browser chrome (consilium.europa.eu screenshot).",
+      "fields": { "firstName": "Erika", "lastName": "Mustermann", "docNumber": "C01X00T47", "expiryISO": "2027-02-28", "country": "Germany" }
+    },
+    {
+      "image": "deu_reisepass2024.jpg",
+      "type": "passport", "mrz": "td3", "country_code": "D",
+      "notes": "German Reisepass 2024 specimen, low resolution (472x331). Stress-tests recognition at low DPI.",
+      "fields": { "firstName": "Erika", "lastName": "Mustermann", "docNumber": "CZ6311T47", "expiryISO": "2034-05-01", "country": "Germany" }
+    },
+    {
+      "image": "nld_passport.jpg",
+      "type": "passport", "mrz": "td3", "country_code": "NLD",
+      "notes": "Dutch SPECIMEN. Particle surname 'de Bruijn'. Doc number is the literal 'SPECI2014'.",
+      "fields": { "firstName": "Willeke", "lastName": "De Bruijn", "docNumber": "SPECI2014", "expiryISO": "2024-03-09", "country": "Netherlands" }
+    },
+    {
+      "image": "fra_passport.jpg",
+      "type": "passport", "mrz": "td3", "country_code": "FRA",
+      "notes": "French SPECIMEN. Two-token surname 'Specimen Abb'. Red SPECIMEN overprint.",
+      "fields": { "firstName": "Natacha", "lastName": "Specimen Abb", "docNumber": "90RF02331", "expiryISO": "2029-03-03", "country": "France" }
+    },
+    {
+      "image": "ita_passport.jpg",
+      "type": "passport", "mrz": "td3", "country_code": "ITA",
+      "notes": "Italian FAC-SIMILE. Red diagonal overprint.",
+      "fields": { "firstName": "Maria", "lastName": "Rossi", "docNumber": "KK6000533", "expiryISO": "2033-07-30", "country": "Italy" }
+    },
+    {
+      "image": "prt_passport.jpg",
+      "type": "passport", "mrz": "td3", "country_code": "PRT",
+      "notes": "Portuguese SPECIMEN. Diacritics + three-token surname 'Garção de Magalhães', given 'Inês'. Type PX.",
+      "fields": { "firstName": "Inês", "lastName": "Garção de Magalhães", "docNumber": "I700044", "expiryISO": "2022-06-16", "country": "Portugal" }
+    },
+    {
+      "image": "bel_passport.png",
+      "type": "passport", "mrz": "td3", "country_code": "BEL",
+      "notes": "Belgian SPECIMEN. Nationality encoded as fictional 'UTO' (Utopia); issuing country BEL.",
+      "fields": { "firstName": "Olivia", "lastName": "Specimen", "docNumber": "GA0007805", "expiryISO": "2029-02-06", "country": "Belgium" }
+    },
+    {
+      "image": "aus_passport.jpg",
+      "type": "passport", "mrz": "td3", "country_code": "AUS",
+      "notes": "Australian R-series specimen 'Jane Citizen'.",
+      "fields": { "firstName": "Jane", "lastName": "Citizen", "docNumber": "RA0123456", "expiryISO": "2032-08-01", "country": "Australia" }
+    },
+    {
+      "image": "deu_personalausweis_back.jpg",
+      "type": "id_card", "mrz": "td1", "country_code": "D",
+      "notes": "German Personalausweis 2010 specimen, BACK (TD1 3-line MRZ). MUSTER watermark.",
+      "fields": { "firstName": "Erika", "lastName": "Mustermann", "docNumber": "T22000129", "expiryISO": "2020-10-31", "country": "Germany" }
+    },
+    {
+      "image": "deu_personalausweis_front.jpg",
+      "type": "id_card", "mrz": "none", "country_code": "D",
+      "notes": "German Personalausweis 2010 specimen, FRONT (no MRZ — visual-zone only). 'GEB. GABLER' is the birth name and must NOT be taken as the surname.",
+      "fields": { "firstName": "Erika", "lastName": "Mustermann", "docNumber": "T22000129", "expiryISO": "2020-10-31", "country": "Germany" }
+    },
+    {
+      "image": "svk_id.jpg",
+      "type": "id_card", "mrz": "none", "country_code": "SVK",
+      "notes": "Slovak ID specimen 'Vzorka Specimen', FRONT (no MRZ). Country 'Slovakia' is NOT in the current ISO map — known coverage gap.",
+      "fields": { "firstName": "Vzorka", "lastName": "Specimen", "docNumber": "XX024051", "expiryISO": "2032-10-11", "country": "Slovakia" }
+    },
+    {
+      "image": "fra_driverlicense.jpg",
+      "type": "driver_license", "mrz": "none", "country_code": "FRA",
+      "notes": "French Permis de conduire specimen. Given 'Hélène' (diacritic), surname 'Jules Specimen de Test'. Has a non-ICAO 1-line machine zone the parser does not handle — visual-zone path.",
+      "fields": { "firstName": "Hélène", "lastName": "Jules Specimen de Test", "docNumber": "13AA00002", "expiryISO": "2014-01-01", "country": "France" }
+    }
+  ]
+}
