@@ -1,5 +1,45 @@
 import { describe, it, expect } from "vitest";
-import { parseDocumentText } from "./ocrParse";
+import { parseDocumentText, parseDocumentSplit } from "./ocrParse";
+
+// ─── US driver's licence: noisy capture (synthetic, fake identity) ───────────
+// Mirrors the failure mode of a real REAL ID: a garbled duplicate "FN" line, a
+// real name line prefixed with OCR junk ("$ FN …"), and the AAMVA document
+// discriminator (DD…) — which a naive "longest token" heuristic grabbed as the
+// document number. All values here are invented.
+const MESSY_US_DL = `
+FN NN 2, :
+CALIFORNIA USA
+DL I1234562
+$ FN MARIA LID WN
+LN SAMPLESON
+DOB 02/06/1991
+EXP 09/24/2028
+HAIR BLN EYES GRN
+DD A2/1512023503RB/DDFD/31
+`;
+
+describe("parseDocumentText — noisy US driver's licence", () => {
+  const r = parseDocumentText(MESSY_US_DL);
+  it("picks the real first name, not the garbled FN line", () =>
+    expect(r.firstName).toBe("Maria"));
+  it("reads the labelled DL number", () => expect(r.docNumber).toBe("I1234562"));
+  it("never returns the AAMVA document discriminator as the number", () => {
+    expect(r.docNumber).not.toContain("1512023503");
+    expect(r.docNumber.length).toBeLessThanOrEqual(10);
+  });
+  it("reads the expiry", () => expect(r.expiryISO).toBe("2028-09-24"));
+});
+
+describe("parseDocumentSplit — MRZ-band noise must not pollute a non-MRZ card", () => {
+  // The OCR-B band over a US licence is pure noise, including a long fake
+  // "number". It must be ignored when there's no real MRZ.
+  const MRZ_NOISE = `\\LZ JJ91 /\\/ 00312/-15Z202SSOSRB/DDFD/ M\nQ I HGT 5304 53 Z`;
+  const r = parseDocumentSplit(MRZ_NOISE, MESSY_US_DL);
+  it("still finds the real DL number from the visual zone", () =>
+    expect(r.docNumber).toBe("I1234562"));
+  it("does not leak the MRZ-band noise into the number", () =>
+    expect(r.docNumber).not.toContain("15Z202"));
+});
 
 // Each fixture below mirrors what tesseract.js produces when scanning a real
 // document of that type. They're intentionally a little noisy: stripped

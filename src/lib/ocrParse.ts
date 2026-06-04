@@ -688,26 +688,49 @@ function stripDiacritics(s: string): string {
 // Try to read a labelled name field. Looks first for inline labels
 // ("LN ALEX ..."), then for a label on its own line followed by the value
 // on the next line ("Apellidos\nGUTIERREZ ARENAS").
+//
+// On a noisy photo the same label can appear more than once — a garbled
+// "FN NN" line and the real "$ FN JUSTYNA" line. So we collect every candidate
+// (tolerating leading noise before the label) and return the most name-like one
+// (most alphabetic characters) rather than the first.
 function readLabelledLine(lines: string[], labelPattern: RegExp): string {
+  const candidates: string[] = [];
   for (let i = 0; i < lines.length; i++) {
-    const stripped = stripDiacritics(lines[i]);
+    const stripped = stripDiacritics(lines[i]).replace(/^[^A-Za-z]+/, "");
     const m = stripped.match(labelPattern);
     if (!m) continue;
-    // Inline value.
     const after = stripped.slice(m[0].length).replace(/^[\s:.\/]+/, "").trim();
     const inline = after.replace(/[^A-Za-z'\- ]/g, "").trim();
-    if (inline.length >= 2) return inline;
+    if (inline.length >= 2) {
+      candidates.push(inline);
+      continue;
+    }
     // Value on the next non-empty line.
     for (let j = i + 1; j < lines.length; j++) {
       const next = stripDiacritics(lines[j]).replace(/[^A-Za-z'\- ]/g, "").trim();
-      if (next.length >= 2) return next;
+      if (next.length >= 2) {
+        candidates.push(next);
+        break;
+      }
     }
   }
-  return "";
+  if (candidates.length === 0) return "";
+  const alpha = (s: string) => s.replace(/[^A-Za-z]/g, "").length;
+  return candidates.reduce((best, c) => (alpha(c) > alpha(best) ? c : best));
 }
 
 interface VisualZoneOptions {
   prefer: "mdy" | "dmy";
+}
+
+// US/Canada driver licences encode their data with AAMVA element IDs (DD =
+// document discriminator, DCS = surname, DAC = first name, DBA = expiry …) and
+// print other label codes. None of these are the user-facing document number,
+// yet their long alphanumeric runs (especially the discriminator) are exactly
+// what a naive "longest token" heuristic would grab. Reject them.
+function isAamvaNoise(t: string): boolean {
+  if (/^(DD|DCS|DAC|DCT|DAQ|DCF|DCG|DCA|DCB|DCD|ICN)/.test(t)) return true;
+  return /^(USA|CAN|DEU|ESP|FRA|GBR|EXP|DOB|ISS|SEX|HGT|WGT|EYES|HAIR|MALE|FEMALE|CLASS|REAL|LIMITED|TERM|VETERAN|DONOR)$/.test(t);
 }
 
 function parseVisualZone(text: string, opts: VisualZoneOptions): ParsedDocument {
@@ -727,25 +750,38 @@ function parseVisualZone(text: string, opts: VisualZoneOptions): ParsedDocument 
     for (const l of lines) {
       const stripped = stripDiacritics(l);
       const labelled = stripped.match(
-        /(?:DL|LIC(?:ENSE|ENCE)?\s*(?:NO|NUM|#)?|D\.L\.|DOKUMENTEN-?NUMMER|REISEPASS-?NR|PASSPORT\s*NO|PASAPORTE\s*N[O°]?|N[°O]\s*DE?\s*PASSEPORT|DNI)[\s:.#\/]*([A-Z0-9-]{6,})/i
+        /(?:DL|ID|LIC(?:ENSE|ENCE)?\s*(?:NO|NUM|#)?|D\.L\.|DOKUMENTEN-?NUMMER|REISEPASS-?NR|PASSPORT\s*NO|PASAPORTE\s*N[O°]?|N[°O]\s*DE?\s*PASSEPORT|DNI)[\s:.#\/]*([A-Z]?\d[A-Z0-9]{4,9})\b/i
       );
-      if (labelled) {
+      // Guard against AAMVA field codes (DD = document discriminator, etc.)
+      // masquerading as a labelled number.
+      if (labelled && !isAamvaNoise(labelled[1].toUpperCase())) {
         docNumber = labelled[1].toUpperCase();
         break;
       }
     }
   }
+  // US/Canadian driver-licence numbers are 1 letter + 6–8 digits (e.g.
+  // "Y6412786"); prefer that distinct shape anywhere in the text.
   if (!docNumber) {
-    const upper = text.toUpperCase();
-    const tokens = upper.match(/[A-Z0-9-]{6,}/g) ?? [];
-    docNumber =
-      tokens
-        .filter((t) => /\d/.test(t))
-        .filter(
-          (t) =>
-            !/^(USA|CAN|DEU|ESP|EXP|DOB|ISS|SEX|HGT|WGT|EYES|HAIR|MALE|FEMALE)$/.test(t)
-        )
-        .sort((a, b) => b.length - a.length)[0] ?? "";
+    const usDL = stripDiacritics(text).toUpperCase().match(/\b([A-Z]\d{6,8})\b/);
+    if (usDL && !isAamvaNoise(usDL[1])) docNumber = usDL[1];
+  }
+  // Conservative last resort: a single plausible alphanumeric ID token (5–10
+  // chars, mixes letters+digits OR a 6–10 digit run), never the longest random
+  // string. We DELIBERATELY leave it blank rather than emit a wrong number — a
+  // blank field the user fills beats a confident-but-wrong document number.
+  if (!docNumber) {
+    const upper = stripDiacritics(text).toUpperCase();
+    const tokens = (upper.match(/[A-Z0-9]{5,10}/g) ?? []).filter(
+      (t) =>
+        !isAamvaNoise(t) &&
+        !/^(19|20)\d{2}$/.test(t) && // not a year
+        ((/[A-Z]/.test(t) && /\d/.test(t)) || /^\d{6,10}$/.test(t))
+    );
+    // Only auto-fill if exactly one distinct candidate survives — ambiguity
+    // means we can't trust it, so leave it for manual entry.
+    const distinct = [...new Set(tokens)];
+    if (distinct.length === 1) docNumber = distinct[0];
   }
 
   // ---- Names ----------------------------------------------------------
@@ -778,9 +814,19 @@ function parseVisualZone(text: string, opts: VisualZoneOptions): ParsedDocument 
   // to call them, not their full birth name).
   if (firstName) firstName = firstName.split(/\s+/)[0];
 
-  // Last fallback: a line of two or more uppercase words.
+  // Last fallback: a clean line of two or more uppercase words (e.g. a passport
+  // visual zone printing "SURNAME GIVEN"). Skip label lines (FN/LN/DOB/…) and
+  // anything with digits or punctuation, so a noisy "FN NN 2, :" line is never
+  // mistaken for a name — better to leave the field blank for manual entry.
   if (!firstName || !lastName) {
-    const candidate = lines.find((l) => /^[A-Z][A-Z'\-]+\s+[A-Z][A-Z'\-]+/.test(l));
+    const isLabel = /^(?:FN|LN|DL|ID|DOB|EXP|ISS|SEX|HGT|WGT|DD|DC[A-Z]|CLASS|REAL|USA|CAN)\b/;
+    const candidate = lines
+      .map((l) => stripDiacritics(l).trim())
+      .find(
+        (l) =>
+          /^[A-Z][A-Z'-]+\s+[A-Z][A-Z'-]+$/.test(l) && // exactly clean uppercase words
+          !isLabel.test(l)
+      );
     if (candidate) {
       const parts = candidate.split(/\s+/);
       if (!firstName) firstName = parts[0];
@@ -802,13 +848,10 @@ function parseVisualZone(text: string, opts: VisualZoneOptions): ParsedDocument 
 // Public entry point
 // ---------------------------------------------------------------------------
 
-export function parseDocumentText(text: string): ParsedDocument {
-  if (!text || !text.trim()) {
-    return {
-      firstName: "", lastName: "", docNumber: "", expiryISO: "", country: "",
-      source: "none",
-    };
-  }
+// MRZ parsers, in preference order. Returns null when no machine-readable zone
+// is found. Scans the whole text, so passing the MRZ pass + visual pass
+// concatenated is fine here.
+function tryMrz(text: string): ParsedDocument | null {
   const td3 = parseTD3(text);
   if (td3) {
     // If the MRZ-derived doc number is short (8 digits where most passports
@@ -822,18 +865,41 @@ export function parseDocumentText(text: string): ParsedDocument {
   const td1 = parseTD1(text);
   if (td1) {
     // For Spanish DNI: visual zone has the user-facing DNI (8 digits + letter)
-    // while the MRZ carries the bureaucratic "support number". Prefer the DNI
-    // when we can find one in the text.
+    // while the MRZ carries the bureaucratic "support number". Prefer the DNI.
     if (td1.country === "Spain") {
       const dni = text.match(/\b(\d{8}[A-Z])\b/);
       if (dni) td1.docNumber = dni[1];
     }
     return td1;
   }
-  // Country detection chooses the date-format preference for visual zones.
+  return null;
+}
+
+function parseVisual(text: string): ParsedDocument {
   const country = detectCountry(text);
   const prefer: "mdy" | "dmy" = country === "United States" ? "mdy" : "dmy";
   const lic = parseVisualZone(text, { prefer });
   if (lic.firstName || lic.docNumber || lic.expiryISO) return lic;
   return { ...lic, source: "partial" };
+}
+
+const EMPTY: ParsedDocument = {
+  firstName: "", lastName: "", docNumber: "", expiryISO: "", country: "", source: "none",
+};
+
+export function parseDocumentText(text: string): ParsedDocument {
+  if (!text || !text.trim()) return EMPTY;
+  return tryMrz(text) ?? parseVisual(text);
+}
+
+// Two-pass variant used by the live engine (src/lib/ocrEngine.ts): the MRZ band
+// is OCR'd with the OCR-B model, the visual zone with stock English. We look for
+// an MRZ across both, but when there is none (driver licences, ID-card fronts)
+// we run the visual parser on the VISUAL text ONLY — the OCR-B band over a
+// non-MRZ card is pure noise (e.g. it turns a US licence's barcode strip into a
+// long fake "document number"), so it must not feed the visual heuristics.
+export function parseDocumentSplit(mrzText: string, visualText: string): ParsedDocument {
+  const combined = `${mrzText}\n${visualText}`.trim();
+  if (!combined) return EMPTY;
+  return tryMrz(combined) ?? parseVisual(visualText);
 }

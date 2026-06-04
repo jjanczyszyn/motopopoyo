@@ -8,7 +8,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseDocumentText } from "../../src/lib/ocrParse";
+import { parseDocumentSplit } from "../../src/lib/ocrParse";
 import {
   scoreDocument, Fields, FieldResult, STRUCTURED, FUZZY, NAME_PASS, FieldKey,
 } from "./score";
@@ -49,7 +49,12 @@ export function runProfile(profile: string): DocReport[] {
       );
     }
     const text = readFileSync(cachePath, "utf8");
-    const parsed = parseDocumentText(text);
+    // Cache format: "<MRZ pass>\n===VISUAL===\n<visual pass>". Older single-pass
+    // caches (no marker) are treated as all-visual.
+    const [mrzText, visualText] = text.includes("===VISUAL===")
+      ? (text.split("===VISUAL===") as [string, string])
+      : ["", text];
+    const parsed = parseDocumentSplit(mrzText, visualText);
     const got: Fields = {
       firstName: parsed.firstName,
       lastName: parsed.lastName,

@@ -99,7 +99,8 @@ async function recognizeProfile(profileName) {
       continue;
     }
     const t0 = Date.now();
-    const texts = [];
+    const mrzParts = [];
+    const visualParts = [];
     for (const pass of profile.passes) {
       const worker = await getWorker(workers, pass);
       let src = imgPath;
@@ -113,9 +114,12 @@ async function recognizeProfile(profileName) {
         ...(pass.params ?? {}),
       });
       const { data } = await worker.recognize(src);
-      texts.push(data.text);
+      (pass.region === "mrz" ? mrzParts : visualParts).push(data.text);
     }
-    const text = texts.join("\n");
+    // Persist the MRZ pass and the visual pass separated by a marker, so the
+    // scorer can feed them to parseDocumentSplit exactly like the live engine
+    // (the MRZ-band noise must not pollute the visual-zone heuristics).
+    const text = `${mrzParts.join("\n")}\n===VISUAL===\n${visualParts.join("\n")}`;
     writeFileSync(join(outDir, `${doc.image}.txt`), text, "utf8");
     console.log(`  ${doc.image.padEnd(30)} ${String(Date.now() - t0).padStart(5)}ms  ${text.replace(/\s+/g, " ").trim().length} chars`);
   }

@@ -19,7 +19,7 @@
 // are fetched (no document data leaves the browser), which keeps us clear of
 // Colombia Ley 1581 / GDPR exposure from shipping IDs to a cloud OCR service.
 
-import { parseDocumentText, ParsedDocument } from "./ocrParse";
+import { parseDocumentSplit, ParsedDocument } from "./ocrParse";
 
 // Fraction of page height occupied by the MRZ band (bottom). Sized to include
 // all three lines of a TD1 ID card. Keep in sync with preprocess.mjs.
@@ -92,7 +92,7 @@ export async function recognizeDocument(
   const { createWorker } = await import("tesseract.js");
   const img = await loadImage(file);
 
-  const texts: string[] = [];
+  let mrzText = "";
 
   // --- MRZ pass (OCR-B, cropped band) -------------------------------------
   // Best-effort: if the OCR-B model can't be fetched, we still get the visual
@@ -102,7 +102,7 @@ export async function recognizeDocument(
     const ocrb = await createWorker("OCRB", 0, { langPath: OCRB_LANG_PATH, gzip: true });
     await ocrb.setParameters({ tessedit_pageseg_mode: "6" as never });
     const { data } = await ocrb.recognize(mrzCanvas);
-    texts.push(data.text);
+    mrzText = data.text;
     await ocrb.terminate();
   } catch (err) {
     console.warn("MRZ (OCR-B) pass failed; continuing with visual pass only", err);
@@ -117,9 +117,11 @@ export async function recognizeDocument(
   });
   await eng.setParameters({ tessedit_pageseg_mode: "6" as never });
   const { data } = await eng.recognize(fullCanvas);
-  texts.push(data.text);
+  const visualText = data.text;
   await eng.terminate();
 
-  const text = texts.join("\n");
-  return { text, parsed: parseDocumentText(text) };
+  // Parse with the two passes kept separate so the OCR-B band (noise on a
+  // non-MRZ card) never pollutes the visual-zone heuristics.
+  const text = `${mrzText}\n${visualText}`;
+  return { text, parsed: parseDocumentSplit(mrzText, visualText) };
 }
