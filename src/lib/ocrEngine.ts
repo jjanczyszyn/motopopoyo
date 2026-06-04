@@ -1,79 +1,97 @@
-// Browser-side OCR pipeline for identity documents.
+// Browser-side OCR pipeline for identity documents. Mirrors the Node accuracy
+// harness (fixtures/harness/recognize.ts) so what ships is what we measure.
 //
-// This mirrors the validated "improved" profile in fixtures/harness/recognize.mjs
-// (which the accuracy harness measures), so what ships matches what we test:
+// Passes (text from all of them is unioned and handed to the parser):
+//   1. MRZ band (OCR-B model) — passports & MRZ ID cards. The OCR-B model reads
+//      the "<" filler that stock English mangles.
+//   2. Visual zone, plain grayscale — clean documents.
+//   3. Visual zone, RED channel, cleaned — dark/black text over a security
+//      background.
+//   4. Visual zone, GREEN channel, cleaned — RED text (the ID number and dates
+//      on US driver's licences / ID cards) over a security background.
+//   Cleaning = contrast-stretch → Otsu threshold → morphological opening, which
+//   erases the guilloché security pattern while keeping the character strokes
+//   (see src/lib/imageOps.ts).
 //
-//   1. Preprocess the photo on a <canvas>: grayscale, upscale small images, and
-//      bump contrast. (The old pipeline fed the raw photo straight to Tesseract
-//      with no preprocessing — the single biggest cause of unreadable MRZs.)
-//   2. MRZ pass: crop the bottom band and recognise it with the OCR-B model.
-//      Stock "eng" renders the OCR-B "<" filler as K/C/L/S and destroys the MRZ;
-//      the OCR-B model reads it correctly. This is where passports/ID cards get
-//      their reliable, check-digit-verified fields.
-//   3. Visual pass: full image with stock "eng", for documents without a
-//      machine-readable zone (driver's licences, ID-card fronts).
-//   4. Concatenate (MRZ first) and hand to parseDocumentText, which prefers the
-//      MRZ and falls back to the visual zone.
-//
-// Privacy: recognition runs entirely on-device. Only the Tesseract model files
-// are fetched (no document data leaves the browser), which keeps us clear of
-// Colombia Ley 1581 / GDPR exposure from shipping IDs to a cloud OCR service.
+// Everything runs on-device (Tesseract/WASM). No document data leaves the
+// browser — only the model files are fetched (Ley 1581 / GDPR).
 
 import { parseDocumentSplit, ParsedDocument } from "./ocrParse";
+import { cleanChannel, grayToRgba } from "./imageOps";
 
-// Fraction of page height occupied by the MRZ band (bottom). Sized to include
-// all three lines of a TD1 ID card. Keep in sync with preprocess.mjs.
 const MRZ_BAND_FRACTION = 0.34;
-const MIN_LONG_EDGE = 2000;
+const MRZ_MIN_LONG_EDGE = 2000;
+const VISUAL_TARGET_LONG_EDGE = 1800; // upscale small photos, downscale huge ones
+const OCRB_LANG_PATH = `${import.meta.env.BASE_URL}tessdata`;
+
+function targetScale(longEdge: number): number {
+  if (longEdge < VISUAL_TARGET_LONG_EDGE) return Math.min(3, VISUAL_TARGET_LONG_EDGE / longEdge);
+  if (longEdge > 2000) return 2000 / longEdge;
+  return 1;
+}
 
 function loadImage(file: Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(img);
-    };
-    img.onerror = (e) => {
-      URL.revokeObjectURL(url);
-      reject(e);
-    };
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = (e) => { URL.revokeObjectURL(url); reject(e); };
     img.src = url;
   });
 }
 
-// Grayscale + upscale + contrast, optionally cropped to the MRZ band. Returns a
-// canvas Tesseract can consume directly.
-function preprocess(img: HTMLImageElement, region?: "mrz"): HTMLCanvasElement {
-  const sx = 0;
-  const sy = region === "mrz" ? Math.round(img.height * (1 - MRZ_BAND_FRACTION)) : 0;
-  const sw = img.width;
-  const sh = region === "mrz" ? img.height - sy : img.height;
+function newCanvas(w: number, h: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  return [c, c.getContext("2d", { willReadFrequently: true })!];
+}
 
-  const longEdge = Math.max(sw, sh);
-  const scale = longEdge < MIN_LONG_EDGE ? MIN_LONG_EDGE / longEdge : 1;
-  const dw = Math.round(sw * scale);
-  const dh = Math.round(sh * scale);
-
-  const canvas = document.createElement("canvas");
-  canvas.width = dw;
-  canvas.height = dh;
-  const ctx = canvas.getContext("2d")!;
-  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, dw, dh);
-
-  const data = ctx.getImageData(0, 0, dw, dh);
-  const px = data.data;
-  // contrast factor ~ jimp's 0.25
-  const c = 1.6;
-  const intercept = 128 * (1 - c);
-  for (let i = 0; i < px.length; i += 4) {
-    let g = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
-    g = c * g + intercept;
-    g = g < 0 ? 0 : g > 255 ? 255 : g;
-    px[i] = px[i + 1] = px[i + 2] = g;
+// MRZ band: grayscale + upscale (the OCR-B model handles the band's own noise).
+function mrzCanvas(img: HTMLImageElement): HTMLCanvasElement {
+  const sy = Math.round(img.height * (1 - MRZ_BAND_FRACTION));
+  const sh = img.height - sy;
+  const scale = Math.max(1, MRZ_MIN_LONG_EDGE / Math.max(img.width, sh));
+  const w = Math.round(img.width * scale), h = Math.round(sh * scale);
+  const [c, ctx] = newCanvas(w, h);
+  ctx.drawImage(img, 0, sy, img.width, sh, 0, 0, w, h);
+  const d = ctx.getImageData(0, 0, w, h);
+  for (let i = 0; i < d.data.length; i += 4) {
+    const g = 0.299 * d.data[i] + 0.587 * d.data[i + 1] + 0.114 * d.data[i + 2];
+    d.data[i] = d.data[i + 1] = d.data[i + 2] = g < 0 ? 0 : g > 255 ? 255 : g;
   }
-  ctx.putImageData(data, 0, 0);
-  return canvas;
+  ctx.putImageData(d, 0, 0);
+  return c;
+}
+
+function scaledDims(img: HTMLImageElement): [number, number] {
+  const scale = targetScale(Math.max(img.width, img.height));
+  return [Math.round(img.width * scale), Math.round(img.height * scale)];
+}
+
+// Plain grayscale canvas (clean documents read best without morphology).
+function grayCanvas(img: HTMLImageElement): HTMLCanvasElement {
+  const [w, h] = scaledDims(img);
+  const [c, ctx] = newCanvas(w, h);
+  ctx.drawImage(img, 0, 0, w, h);
+  const d = ctx.getImageData(0, 0, w, h);
+  for (let i = 0; i < d.data.length; i += 4) {
+    const g = 0.299 * d.data[i] + 0.587 * d.data[i + 1] + 0.114 * d.data[i + 2];
+    d.data[i] = d.data[i + 1] = d.data[i + 2] = g;
+  }
+  ctx.putImageData(d, 0, 0);
+  return c;
+}
+
+// A cleaned single-channel canvas (contrast→Otsu→morph-open) for guilloché docs.
+function cleanedCanvas(img: HTMLImageElement, channel: "r" | "g"): HTMLCanvasElement {
+  const [w, h] = scaledDims(img);
+  const [c, ctx] = newCanvas(w, h);
+  ctx.drawImage(img, 0, 0, w, h);
+  const d = ctx.getImageData(0, 0, w, h);
+  const clean = cleanChannel(new Uint8ClampedArray(d.data), w, h, channel, 2);
+  d.data.set(grayToRgba(clean));
+  ctx.putImageData(d, 0, 0);
+  return c;
 }
 
 export interface RecognizeResult {
@@ -81,47 +99,38 @@ export interface RecognizeResult {
   parsed: ParsedDocument;
 }
 
-// Path to the OCR-B model directory (served from /public). tesseract.js fetches
-// `${langPath}/OCRB.traineddata.gz`.
-const OCRB_LANG_PATH = `${import.meta.env.BASE_URL}tessdata`;
-
 export async function recognizeDocument(
   file: Blob,
   onProgress?: (pct: number) => void
 ): Promise<RecognizeResult> {
   const { createWorker } = await import("tesseract.js");
   const img = await loadImage(file);
+  onProgress?.(5);
 
+  // --- MRZ pass (OCR-B) ---------------------------------------------------
   let mrzText = "";
-
-  // --- MRZ pass (OCR-B, cropped band) -------------------------------------
-  // Best-effort: if the OCR-B model can't be fetched, we still get the visual
-  // pass below, so the flow degrades rather than failing outright.
   try {
-    const mrzCanvas = preprocess(img, "mrz");
     const ocrb = await createWorker("OCRB", 0, { langPath: OCRB_LANG_PATH, gzip: true });
     await ocrb.setParameters({ tessedit_pageseg_mode: "6" as never });
-    const { data } = await ocrb.recognize(mrzCanvas);
-    mrzText = data.text;
+    mrzText = (await ocrb.recognize(mrzCanvas(img))).data.text;
     await ocrb.terminate();
   } catch (err) {
-    console.warn("MRZ (OCR-B) pass failed; continuing with visual pass only", err);
+    console.warn("MRZ (OCR-B) pass failed; continuing with visual passes", err);
   }
+  onProgress?.(40);
 
-  // --- Visual pass (stock English, full image) ----------------------------
-  const fullCanvas = preprocess(img);
-  const eng = await createWorker("eng", 1, {
-    logger: (m: { status: string; progress: number }) => {
-      if (onProgress && m.status === "recognizing text") onProgress(Math.round(m.progress * 100));
-    },
-  });
+  // --- Visual passes: plain gray + red/green cleaned ----------------------
+  const eng = await createWorker("eng", 1);
   await eng.setParameters({ tessedit_pageseg_mode: "6" as never });
-  const { data } = await eng.recognize(fullCanvas);
-  const visualText = data.text;
+  const plainText = (await eng.recognize(grayCanvas(img))).data.text;
+  onProgress?.(60);
+  const redText = (await eng.recognize(cleanedCanvas(img, "r"))).data.text;
+  onProgress?.(80);
+  const grnText = (await eng.recognize(cleanedCanvas(img, "g"))).data.text;
   await eng.terminate();
+  onProgress?.(100);
 
-  // Parse with the two passes kept separate so the OCR-B band (noise on a
-  // non-MRZ card) never pollutes the visual-zone heuristics.
-  const text = `${mrzText}\n${visualText}`;
+  const visualText = `${plainText}\n${redText}\n${grnText}`;
+  const text = `${mrzText}\n===VISUAL===\n${visualText}`;
   return { text, parsed: parseDocumentSplit(mrzText, visualText) };
 }

@@ -2,7 +2,7 @@
 // runs the real parser (src/lib/ocrParse.ts), scores every field against
 // ground_truth.json, and builds per-document + aggregate tables.
 //
-// Pure/deterministic: no OCR here (that's recognize.mjs). Importable by the
+// Pure/deterministic: no OCR here (that's recognize.ts). Importable by the
 // vitest accuracy test and runnable for the printed report.
 
 import { readFileSync, existsSync } from "node:fs";
@@ -45,7 +45,7 @@ export function runProfile(profile: string): DocReport[] {
     if (!existsSync(cachePath)) {
       throw new Error(
         `Missing OCR cache for ${doc.image} (profile "${profile}"). ` +
-          `Run: node fixtures/harness/recognize.mjs ${profile}`
+          `Run: npx tsx fixtures/harness/recognize.ts ${profile}`
       );
     }
     const text = readFileSync(cachePath, "utf8");

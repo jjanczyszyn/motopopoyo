@@ -28,7 +28,7 @@ deterministic and offline — it reads cached OCR text from `ocr-cache/`. You on
 need to regenerate when the images or the recognition pipeline change:
 
 ```bash
-npm run ocr:recognize     # = node fixtures/harness/recognize.mjs all
+npm run ocr:recognize     # = tsx fixtures/harness/recognize.ts all
 ```
 
 Tesseract is deterministic for a fixed image + config, so one capture per
@@ -39,20 +39,23 @@ vision LLMs, not Tesseract.)
 
 ```
 fixtures/
-  images/            13 specimen documents (passports, ID cards, a driver licence)
+  images/            16 specimen documents (passports, ID-card fronts+backs, a driver licence)
   ground_truth.json  expected fields per image (+ notes)
   ocr-cache/
     baseline/        OCR text from the OLD pipeline (eng, PSM 6, no preprocessing)
-    improved/        OCR text from the NEW pipeline (preprocess + OCR-B MRZ pass)
+    improved/        OCR text from the NEW pipeline (OCR-B MRZ + cleaned channels)
   preprocessed/      debug: the preprocessed images fed to Tesseract (gitignored)
   harness/
-    recognize.mjs    runs Tesseract over the images → ocr-cache (the slow step)
-    preprocess.mjs   grayscale + upscale + contrast + MRZ-band crop (jimp)
+    recognize.ts     runs Tesseract over the images → ocr-cache (the slow step, tsx)
     score.ts         exact-match (structured) + edit-distance (names) scoring
     run.ts           reads cache, parses, scores, builds tables
     accuracy.test.ts the acceptance gate (vitest)
     tessdata/        OCRB.traineddata.gz (also copied to /public/tessdata for the app)
 ```
+
+The image preprocessing (`src/lib/imageOps.ts`) is SHARED between the harness
+(Node/jimp) and the browser engine (`src/lib/ocrEngine.ts`, canvas), so the
+harness measures exactly what ships.
 
 ## Scoring & thresholds
 
@@ -92,13 +95,20 @@ pipeline. Both measured on the same 10 MRZ documents:
 
 ### What changed, by stage
 
-- **Recognition** (`ocrEngine.ts` / `recognize.mjs`):
-  - Added preprocessing (grayscale, upscale small images, contrast). The old
-    pipeline did none.
-  - Added a dedicated **MRZ pass**: crop the bottom band and read it with the
-    **OCR-B** Tesseract model. Stock `eng` renders the OCR-B `<` filler as
-    `K/C/L/S`, which destroyed the `<<` name separator and broke MRZ detection;
-    OCR-B reads it correctly.
+- **Recognition** (`ocrEngine.ts` + shared `imageOps.ts`, mirrored in `recognize.ts`):
+  - The old pipeline did a single stock-`eng` pass on the raw photo. The new one
+    runs up to four passes and unions the text:
+    1. **MRZ band, OCR-B model** — passports & MRZ ID cards. Stock `eng` renders
+       the OCR-B `<` filler as `K/C/L/S` (destroying the `<<` separator); OCR-B
+       reads it correctly.
+    2. **plain grayscale** — clean documents.
+    3. **red channel, cleaned** — dark text over a security background.
+    4. **green channel, cleaned** — RED text (US ID numbers/dates) over a
+       background.
+  - "Cleaned" = contrast-stretch → Otsu threshold → **morphological opening**,
+    which erases the thin guilloché security lines while keeping the thick
+    character strokes. This is what makes a driver's-licence / ID-card front
+    readable. Small images are upscaled toward ~1800px first.
 - **Parsing** (`ocrParse.ts`):
   - **ICAO check-digit validation + OCR-confusion repair** of the document
     number (try the handful of glyphs Tesseract confuses — `0↔O↔D↔G↔B`,
@@ -111,6 +121,23 @@ pipeline. Both measured on the same 10 MRZ documents:
     country trigram like `ARENAS`→`ARE`).
   - TD1 tolerance for the `<<`→`<K<` separator garble; expanded country map
     (added Slovakia etc.); rejected implausible date years.
+  - **US/Canada driver-licence & ID handling**: read the `ID`/`DL` number
+    (tolerating an OCR-split like `Y641 2786` and a stray non-ASCII glyph), the
+    `FN`/`LN` name fields (found anywhere on the line, picked by **consensus**
+    across passes so a garbled duplicate loses to the recurring real value),
+    reject AAMVA field codes (`DD` document discriminator, …), and detect the
+    country from the US **state name**. Never emit a confident-but-wrong number.
+
+## Driver's licences & ID cards (non-MRZ)
+
+The committed visual-zone specimens are low-resolution public samples
+(300–600px) — a worst case; their names/numbers score low purely from a lack of
+pixels. At real capture resolution the pipeline does much better: a **2800px
+California REAL ID** photo extracts **all five fields correctly** (first name,
+surname, ID number, expiry, country) end-to-end through the browser engine. That
+document is a real person's ID, so per `/CLAUDE.md` it is **not committed** —
+it was validated locally only. Accuracy on these documents is strongly
+resolution-dependent; advise users to fill the frame in good light.
 
 ## Known failures (honest list)
 

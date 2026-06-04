@@ -78,6 +78,24 @@
       "type": "driver_license", "mrz": "none", "country_code": "FRA",
       "notes": "French Permis de conduire specimen. Given 'Hélène' (diacritic), surname 'Jules Specimen de Test'. Has a non-ICAO 1-line machine zone the parser does not handle — visual-zone path.",
       "fields": { "firstName": "Hélène", "lastName": "Jules Specimen de Test", "docNumber": "13AA00002", "expiryISO": "2014-01-01", "country": "France" }
+    },
+    {
+      "image": "ita_idcard.png",
+      "type": "id_card", "mrz": "none", "country_code": "ITA",
+      "notes": "Italian electronic ID card (CIE) FAC-SIMILE, front/visual zone. Low resolution.",
+      "fields": { "firstName": "Bianca", "lastName": "Rossi", "docNumber": "CA00000AA", "expiryISO": "2023-12-30", "country": "Italy" }
+    },
+    {
+      "image": "deu_perso2024_front.png",
+      "type": "id_card", "mrz": "none", "country_code": "D",
+      "notes": "German Personalausweis 2024 specimen, FRONT (visual zone). Low resolution. 'GEB. GABLER' is the birth name, not the surname.",
+      "fields": { "firstName": "Erika", "lastName": "Mustermann", "docNumber": "LZ6311T47", "expiryISO": "2034-05-01", "country": "Germany" }
+    },
+    {
+      "image": "deu_perso2024_back.png",
+      "type": "id_card", "mrz": "td1", "country_code": "D",
+      "notes": "German Personalausweis 2024 specimen, BACK (TD1 MRZ). Low resolution.",
+      "fields": { "firstName": "Erika", "lastName": "Mustermann", "docNumber": "LZ6311T47", "expiryISO": "2034-05-01", "country": "Germany" }
     }
   ]
 }

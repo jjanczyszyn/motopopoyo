@@ -569,6 +569,11 @@ function parseTD1(text: string): ParsedDocument | null {
 // Visual-zone heuristics (no readable MRZ)
 // ---------------------------------------------------------------------------
 
+// US state / territory names that appear as the issuing authority on US driver
+// licences and ID cards (which have no country name printed, just the state).
+const US_STATES =
+  /\b(ALABAMA|ALASKA|ARIZONA|ARKANSAS|CALIFORNIA|COLORADO|CONNECTICUT|DELAWARE|FLORIDA|GEORGIA|HAWAII|IDAHO|ILLINOIS|INDIANA|IOWA|KANSAS|KENTUCKY|LOUISIANA|MAINE|MARYLAND|MASSACHUSETTS|MICHIGAN|MINNESOTA|MISSISSIPPI|MISSOURI|MONTANA|NEBRASKA|NEVADA|NEW\s+HAMPSHIRE|NEW\s+JERSEY|NEW\s+MEXICO|NEW\s+YORK|NORTH\s+CAROLINA|NORTH\s+DAKOTA|OHIO|OKLAHOMA|OREGON|PENNSYLVANIA|RHODE\s+ISLAND|SOUTH\s+CAROLINA|SOUTH\s+DAKOTA|TENNESSEE|TEXAS|UTAH|VERMONT|VIRGINIA|WASHINGTON|WEST\s+VIRGINIA|WISCONSIN|WYOMING)\b/i;
+
 function detectCountry(text: string): string {
   for (const [pat, name] of LONG_NAMES_TO_NAME) {
     if (pat.test(text)) return name;
@@ -580,6 +585,8 @@ function detectCountry(text: string): string {
       if (ISO3_TO_NAME[t]) return ISO3_TO_NAME[t];
     }
   }
+  // A US driver's licence / state ID prints a state name, not "USA".
+  if (US_STATES.test(text)) return "United States";
   return "";
 }
 
@@ -633,12 +640,15 @@ function partsToISO(a: string, b: string, c: string, prefer: "mdy" | "dmy" = "md
 // can detect; defaults to US-friendly MDY for ambiguous numeric pairs because
 // the US is the only one of our four target countries that uses that order.
 function parseExpiry(text: string, prefer: "mdy" | "dmy"): string {
-  // Look near an expiry label first so we don't grab DOB or issue date.
+  // Look near an expiry label first so we don't grab DOB or issue date. Try
+  // EVERY label occurrence — OCR often duplicates the field across passes and
+  // garbles one copy ("exp O2/02i1 203" vs a clean "EXP 02/05/2031") — and take
+  // the first that yields a valid date.
   const labels =
-    /(?:EXP(?:IRES|IRY|IRATION)?|DATE\s+OF\s+EXPI(?:RY|RATION)|DATE\s+D'?EXPIRATION|FECHA\s+DE\s+CADUCIDAD|G[UÜ]LTIG\s+BIS|VALABLE\s+JUSQU)/i;
-  const labelMatch = text.match(labels);
-  if (labelMatch && labelMatch.index != null) {
-    const window = text.slice(labelMatch.index, labelMatch.index + 80);
+    /(?:EXP(?:IRES|IRY|IRATION)?|DATE\s+OF\s+EXPI(?:RY|RATION)|DATE\s+D'?EXPIRATION|FECHA\s+DE\s+CADUCIDAD|G[UÜ]LTIG\s+BIS|VALABLE\s+JUSQU)/gi;
+  for (const lm of text.matchAll(labels)) {
+    if (lm.index == null) continue;
+    const window = text.slice(lm.index, lm.index + 80);
     // YYYY-first formats (Canada / ISO) take priority — otherwise a regex
     // hunting for "DD/MM" can lock onto the inner three groups of
     // "2030/07/21" and produce 2021-07-30.
@@ -693,17 +703,26 @@ function stripDiacritics(s: string): string {
 // "FN NN" line and the real "$ FN JUSTYNA" line. So we collect every candidate
 // (tolerating leading noise before the label) and return the most name-like one
 // (most alphabetic characters) rather than the first.
-function readLabelledLine(lines: string[], labelPattern: RegExp): string {
+function readLabelledLine(lines: string[], labelCore: string): string {
+  // Match the label ANYWHERE in the line (not just at the start) preceded by a
+  // boundary — OCR prepends junk like "A LN JANCZYSZYN" / "Ol LN ...", which an
+  // anchored ^ would miss.
+  const labelRe = new RegExp(`(?:^|[^A-Za-z])(?:${labelCore})\\b`, "i");
+  const inlineRe = new RegExp(
+    `(?:^|[^A-Za-z])(?:${labelCore})\\b[\\s:.\\/]*([A-Za-z][A-Za-z'\\- ]+)`,
+    "i"
+  );
   const candidates: string[] = [];
   for (let i = 0; i < lines.length; i++) {
-    const stripped = stripDiacritics(lines[i]).replace(/^[^A-Za-z]+/, "");
-    const m = stripped.match(labelPattern);
-    if (!m) continue;
-    const after = stripped.slice(m[0].length).replace(/^[\s:.\/]+/, "").trim();
-    const inline = after.replace(/[^A-Za-z'\- ]/g, "").trim();
-    if (inline.length >= 2) {
-      candidates.push(inline);
-      continue;
+    const s = stripDiacritics(lines[i]);
+    if (!labelRe.test(s)) continue;
+    const m = s.match(inlineRe);
+    if (m) {
+      const inline = m[1].replace(/[^A-Za-z'\- ]/g, "").trim();
+      if (inline.length >= 2) {
+        candidates.push(inline);
+        continue;
+      }
     }
     // Value on the next non-empty line.
     for (let j = i + 1; j < lines.length; j++) {
@@ -715,8 +734,37 @@ function readLabelledLine(lines: string[], labelPattern: RegExp): string {
     }
   }
   if (candidates.length === 0) return "";
+  // Pick by CONSENSUS: the same label is OCR'd across several passes, so the
+  // real value ("JANCZYSZYN") recurs while garbled duplicates ("JAS CY SCN…")
+  // appear once. Most frequent wins; ties break toward the shorter (cleaner)
+  // value, then more alphabetic. Counting is case/space-insensitive.
+  const norm = (s: string) => s.toUpperCase().replace(/\s+/g, " ").trim();
+  const count = new Map<string, number>();
+  const sample = new Map<string, string>();
+  for (const c of candidates) {
+    const k = norm(c);
+    count.set(k, (count.get(k) ?? 0) + 1);
+    if (!sample.has(k)) sample.set(k, c);
+  }
   const alpha = (s: string) => s.replace(/[^A-Za-z]/g, "").length;
-  return candidates.reduce((best, c) => (alpha(c) > alpha(best) ? c : best));
+  // A plausible name's first token is an alphabetic word of length >= 3
+  // ("MARIA", "JANCZYSZYN") — not "NN" or punctuation noise.
+  const plausible = (s: string) => (/^[A-Za-z]{3,}/.test(s.trim()) ? 1 : 0);
+  let best = candidates[0];
+  let bestScore: number[] = [-1, -1, 1e9, -1];
+  for (const [k, n] of count) {
+    const s = sample.get(k)!;
+    // Rank: frequency desc, plausible-first-token desc, length asc, alpha desc.
+    const score = [n, plausible(s), k.length, alpha(s)];
+    if (score[0] > bestScore[0] ||
+        (score[0] === bestScore[0] && score[1] > bestScore[1]) ||
+        (score[0] === bestScore[0] && score[1] === bestScore[1] && score[2] < bestScore[2]) ||
+        (score[0] === bestScore[0] && score[1] === bestScore[1] && score[2] === bestScore[2] && score[3] > bestScore[3])) {
+      bestScore = score;
+      best = s;
+    }
+  }
+  return best;
 }
 
 interface VisualZoneOptions {
@@ -741,37 +789,54 @@ function parseVisualZone(text: string, opts: VisualZoneOptions): ParsedDocument 
   // 2) Spanish DNI (8 digits + 1 letter) — distinct enough we always prefer it
   // 3) German Reisepass-Nr. / Dokumentennummer label
   // 4) Generic longest token containing letters AND digits as a fallback
+  // Work on an ASCII-normalised copy for the document number: OCR sometimes
+  // drops a stray non-ASCII glyph into a number ("Y¥6412786"), which would
+  // otherwise break the contiguous letter+digits pattern.
+  const asciiText = stripDiacritics(text).replace(/[^\x20-\x7E\n]/g, "");
+  const asciiLines = asciiText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+
   let docNumber = "";
   // Spanish DNI takes priority because the MRZ would carry the support-number
   // and we want the user-facing one.
-  const dni = text.match(/\b(\d{8}[A-Z])\b/);
+  const dni = asciiText.match(/\b(\d{8}[A-Z])\b/);
   if (dni) docNumber = dni[1];
   if (!docNumber) {
-    for (const l of lines) {
-      const stripped = stripDiacritics(l);
-      const labelled = stripped.match(
-        /(?:DL|ID|LIC(?:ENSE|ENCE)?\s*(?:NO|NUM|#)?|D\.L\.|DOKUMENTEN-?NUMMER|REISEPASS-?NR|PASSPORT\s*NO|PASAPORTE\s*N[O°]?|N[°O]\s*DE?\s*PASSEPORT|DNI)[\s:.#\/]*([A-Z]?\d[A-Z0-9]{4,9})\b/i
+    for (const l of asciiLines) {
+      // Allow a stray internal space (OCR splits "Y6412786" → "Y641 2786");
+      // strip it and re-validate the length.
+      // Value = up to 2 leading letters, a digit, alphanumerics, and optionally
+      // a SECOND group that must start with a digit — so a split number
+      // ("Y641 2786") is joined but a trailing word ("… LIMITED") is not.
+      const labelled = l.match(
+        /(?:DL|ID|LIC(?:ENSE|ENCE)?\s*(?:NO|NUM|#)?|D\.L\.|DOKUMENTEN-?NUMMER|REISEPASS-?NR|PASSPORT\s*NO|PASAPORTE\s*N[O°]?|N[°O]\s*DE?\s*PASSEPORT|DNI)[\s:.#\/]*([A-Z]{0,2}\d[A-Z0-9]*(?:\s\d[A-Z0-9]*)?)/i
       );
-      // Guard against AAMVA field codes (DD = document discriminator, etc.)
-      // masquerading as a labelled number.
-      if (labelled && !isAamvaNoise(labelled[1].toUpperCase())) {
-        docNumber = labelled[1].toUpperCase();
-        break;
+      if (labelled) {
+        const v = labelled[1].toUpperCase().replace(/\s+/g, "");
+        const digits = (v.match(/\d/g) ?? []).length;
+        // A real document number is digit-heavy — rejects "ID 3 LIMITED" etc.
+        if (/^[A-Z]{0,2}\d[A-Z0-9]{4,9}$/.test(v) && digits >= 4 && !isAamvaNoise(v)) {
+          docNumber = v;
+          break;
+        }
       }
     }
   }
   // US/Canadian driver-licence numbers are 1 letter + 6–8 digits (e.g.
-  // "Y6412786"); prefer that distinct shape anywhere in the text.
+  // "Y6412786"); prefer that distinct shape anywhere in the text. Tolerate one
+  // internal space from OCR ("Y641 2786").
   if (!docNumber) {
-    const usDL = stripDiacritics(text).toUpperCase().match(/\b([A-Z]\d{6,8})\b/);
-    if (usDL && !isAamvaNoise(usDL[1])) docNumber = usDL[1];
+    const usDL = asciiText.toUpperCase().match(/\b([A-Z]\d{3,4}\s?\d{2,5})\b/);
+    if (usDL) {
+      const v = usDL[1].replace(/\s+/g, "");
+      if (/^[A-Z]\d{6,8}$/.test(v) && !isAamvaNoise(v)) docNumber = v;
+    }
   }
   // Conservative last resort: a single plausible alphanumeric ID token (5–10
   // chars, mixes letters+digits OR a 6–10 digit run), never the longest random
   // string. We DELIBERATELY leave it blank rather than emit a wrong number — a
   // blank field the user fills beats a confident-but-wrong document number.
   if (!docNumber) {
-    const upper = stripDiacritics(text).toUpperCase();
+    const upper = asciiText.toUpperCase();
     const tokens = (upper.match(/[A-Z0-9]{5,10}/g) ?? []).filter(
       (t) =>
         !isAamvaNoise(t) &&
@@ -788,9 +853,9 @@ function parseVisualZone(text: string, opts: VisualZoneOptions): ParsedDocument 
   // Last name labels: LN, LAST NAME, SURNAME, APELLIDOS, FAMILIENNAME, NOM
   // First name labels: FN, FIRST NAME, GIVEN NAMES, NOMBRE, VORNAMEN, PRENOMS
   const lastLabel =
-    /^(?:LN|LAST\s*NAME|SURNAME|APELLIDOS?(?:\s*\/\s*\w+)?|FAMILIENNAME(?:\s*\/\s*\w+)?|NOM(?:\s*\/\s*\w+)?|PRIMER\s+APELLIDO)\b/i;
+    "LN|LAST\\s*NAME|SURNAME|APELLIDOS?|FAMILIENNAME|NOM|PRIMER\\s+APELLIDO|COGNOME";
   const firstLabel =
-    /^(?:FN|FIRST\s*NAME|GIVEN\s*NAMES?(?:\s*\/\s*\w+)?|NOMBRES?(?:\s*\/\s*\w+)?|VORNAMEN?(?:\s*\/\s*\w+)?|PRENOMS?(?:\s*\/\s*\w+)?)\b/i;
+    "FN|FIRST\\s*NAME|GIVEN\\s*NAMES?|NOMBRES?|VORNAMEN?|PRENOMS?|NOME";
 
   let lastName = readLabelledLine(lines, lastLabel);
   let firstName = readLabelledLine(lines, firstLabel);

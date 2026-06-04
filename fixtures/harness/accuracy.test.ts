@@ -6,7 +6,7 @@
 //
 // Regenerate OCR caches (only needed when images or the recognition pipeline
 // change):
-//   node fixtures/harness/recognize.mjs all
+//   npx tsx fixtures/harness/recognize.ts all
 //
 // Run just this suite:
 //   npx vitest run fixtures/harness/accuracy.test.ts
@@ -72,7 +72,7 @@ function report(profile: string) {
 describe("OCR accuracy — baseline (reported, not gated)", () => {
   it("prints the baseline table", () => {
     if (!cacheExists("baseline")) {
-      console.warn("No baseline cache — run: node fixtures/harness/recognize.mjs baseline");
+      console.warn("No baseline cache — run: npx tsx fixtures/harness/recognize.ts baseline");
       return;
     }
     report("baseline");
@@ -90,6 +90,6 @@ describe("OCR accuracy — improved (acceptance gate)", () => {
     expect(mrz.nameAvgFolded).toBeGreaterThanOrEqual(0.85);
   });
   it.skipIf(has)("improved cache missing — generate it", () => {
-    console.warn("No improved cache — run: node fixtures/harness/recognize.mjs improved");
+    console.warn("No improved cache — run: npx tsx fixtures/harness/recognize.ts improved");
   });
 });
