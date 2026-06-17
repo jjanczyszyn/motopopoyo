@@ -7,19 +7,20 @@ import {
 } from "./shared";
 
 interface Props {
+  adminToken: string;
   year: number;
   monthIdx0: number;
   setYear: (y: number) => void;
   setMonth: (m: number) => void;
 }
 
-export function Dashboard({ year, monthIdx0, setYear, setMonth }: Props) {
+export function Dashboard({ adminToken, year, monthIdx0, setYear, setMonth }: Props) {
   const { start, end } = monthBoundsISO(year, monthIdx0);
   const ym = `${start.slice(0, 7)}`;
 
-  const dash = useQuery(api.metrics.dashboard, { fromISO: start, toISO: end });
-  const settle = useQuery(api.settlement.summary, { settlementMonth: ym });
-  const monthly = useQuery(api.metrics.monthlySeries, { year });
+  const dash = useQuery(api.metrics.dashboard, { adminToken, fromISO: start, toISO: end });
+  const settle = useQuery(api.settlement.summary, { adminToken, settlementMonth: ym });
+  const monthly = useQuery(api.metrics.monthlySeries, { adminToken, year });
 
   const trailing = monthly
     ? monthly.slice(Math.max(0, monthIdx0 - 5), monthIdx0 + 1)

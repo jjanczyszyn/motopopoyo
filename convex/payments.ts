@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { assertAdmin } from "./admin";
+import { assertAdmin, assertAdminRead } from "./admin";
 import { DEFAULT_JJ_PCT, DEFAULT_KAREN_PCT } from "./lib/settlement";
 
 const collectorValidator = v.union(v.literal("JJ"), v.literal("Karen"));
@@ -19,8 +19,9 @@ const paymentStatusValidator = v.union(
 );
 
 export const listForReservation = query({
-  args: { reservationId: v.id("reservations") },
-  handler: async (ctx, { reservationId }) => {
+  args: { adminToken: v.string(), reservationId: v.id("reservations") },
+  handler: async (ctx, { adminToken, reservationId }) => {
+    await assertAdminRead(ctx, adminToken);
     const rows = await ctx.db
       .query("payments")
       .withIndex("by_reservation", (q) => q.eq("reservationId", reservationId))
@@ -31,11 +32,13 @@ export const listForReservation = query({
 
 export const listAll = query({
   args: {
+    adminToken: v.string(),
     fromMs: v.optional(v.number()),
     toMs: v.optional(v.number()),
     onlyReceived: v.optional(v.boolean()),
   },
-  handler: async (ctx, { fromMs, toMs, onlyReceived }) => {
+  handler: async (ctx, { adminToken, fromMs, toMs, onlyReceived }) => {
+    await assertAdminRead(ctx, adminToken);
     const all = await ctx.db.query("payments").collect();
     return all.filter((p) => {
       if (onlyReceived && p.status !== "received") return false;

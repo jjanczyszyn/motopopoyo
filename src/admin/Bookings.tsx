@@ -159,6 +159,7 @@ export function Bookings({ adminToken }: Props) {
   const rawBookings = useQuery(
     api.reservations.listForAdmin,
     {
+      adminToken,
       status: statusFilter || undefined,
       source: sourceFilter || undefined,
     }
@@ -506,7 +507,7 @@ function StatusActions({
 function NewBookingForm({
   adminToken, onClose,
 }: { adminToken: string; onClose: () => void }) {
-  const bikes = useQuery(api.bikes.listAll) ?? [];
+  const bikes = useQuery(api.bikes.listAll, { adminToken }) ?? [];
   const create = useMutation(api.reservations.adminCreate);
   const today = isoToday();
   const [bikeId, setBikeId] = React.useState<string>("");
@@ -585,7 +586,7 @@ function NewBookingForm({
 function EditBookingForm({
   reservationId, adminToken, onClose,
 }: { reservationId: Id<"reservations">; adminToken: string; onClose: () => void }) {
-  const all = useQuery(api.reservations.listForAdmin, {});
+  const all = useQuery(api.reservations.listForAdmin, { adminToken });
   const r = all?.find((x) => x._id === reservationId);
   const update = useMutation(api.reservations.adminUpdate);
   const [customerName, setCustomerName] = React.useState("");
@@ -678,7 +679,7 @@ function EditBookingForm({
 export function BookingPaymentsPanel({
   reservationId, adminToken,
 }: { reservationId: Id<"reservations">; adminToken: string }) {
-  const payments = useQuery(api.payments.listForReservation, { reservationId });
+  const payments = useQuery(api.payments.listForReservation, { adminToken, reservationId });
   const removePayment = useMutation(api.payments.remove);
   const updatePayment = useMutation(api.payments.update);
   const [recording, setRecording] = React.useState(false);

@@ -7,20 +7,23 @@ import {
 } from "./shared";
 import { downloadCsv } from "./csv";
 
-interface Props { year: number; setYear: (y: number) => void; }
+interface Props { adminToken: string; year: number; setYear: (y: number) => void; }
 
-export function Reports({ year, setYear }: Props) {
-  const monthly = useQuery(api.metrics.monthlySeries, { year });
+export function Reports({ adminToken, year, setYear }: Props) {
+  const monthly = useQuery(api.metrics.monthlySeries, { adminToken, year });
   const performance = useQuery(api.metrics.motorcyclePerformance, {
+    adminToken,
     fromISO: `${year}-01-01`,
     toISO: `${year + 1}-01-01`,
   });
   const paymentSummary = useQuery(api.metrics.paymentMethodSummary, {
+    adminToken,
     fromISO: `${year}-01-01`,
     toISO: `${year + 1}-01-01`,
   });
-  const settle = useQuery(api.settlement.summary, {});
+  const settle = useQuery(api.settlement.summary, { adminToken });
   const sources = useQuery(api.metrics.sourcePerformance, {
+    adminToken,
     fromISO: `${year}-01-01`,
     toISO: `${year + 1}-01-01`,
   });

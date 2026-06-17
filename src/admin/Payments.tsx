@@ -20,13 +20,14 @@ interface Props {
 
 export function Payments({ adminToken, year, monthIdx0, setYear, setMonth }: Props) {
   const { start, end } = monthBoundsISO(year, monthIdx0);
-  const summary = useQuery(api.metrics.paymentMethodSummary, { fromISO: start, toISO: end });
+  const summary = useQuery(api.metrics.paymentMethodSummary, { adminToken, fromISO: start, toISO: end });
   const allPayments = useQuery(api.payments.listAll, {
+    adminToken,
     fromMs: Date.parse(start),
     toMs: Date.parse(end),
     onlyReceived: false,
   });
-  const reservations = useQuery(api.reservations.list, {});
+  const reservations = useQuery(api.reservations.list, { adminToken });
   const removePayment = useMutation(api.payments.remove);
   const updatePayment = useMutation(api.payments.update);
   const [recordFor, setRecordFor] = React.useState<Id<"reservations"> | null>(null);
@@ -227,7 +228,7 @@ export function RecordPaymentModal({
   reservationId, adminToken, onClose,
 }: { reservationId: Id<"reservations">; adminToken: string; onClose: () => void }) {
   const cfg = useQuery(api.config.get);
-  const reservation = useQuery(api.reservations.list, {});
+  const reservation = useQuery(api.reservations.list, { adminToken });
   const r = reservation?.find((x) => x._id === reservationId);
   const record = useMutation(api.payments.record);
 
@@ -357,7 +358,7 @@ export function EditPaymentModal({
   onClose: () => void;
 }) {
   const cfg = useQuery(api.config.get);
-  const reservation = useQuery(api.reservations.list, {});
+  const reservation = useQuery(api.reservations.list, { adminToken });
   const r = reservation?.find((x) => x._id === payment.reservationId);
   const update = useMutation(api.payments.update);
 

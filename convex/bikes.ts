@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
-import { assertAdmin } from "./admin";
+import { assertAdmin, assertAdminRead } from "./admin";
 
 export const list = query({
   args: {},
@@ -13,8 +13,9 @@ export const list = query({
 
 // Admin listing — every bike, regardless of isActive/status.
 export const listAll = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { adminToken: v.string() },
+  handler: async (ctx, { adminToken }) => {
+    await assertAdminRead(ctx, adminToken);
     return await ctx.db.query("bikes").collect();
   },
 });

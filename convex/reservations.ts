@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { computeTotal, daysBetweenISO } from "./lib/pricing";
-import { assertAdmin } from "./admin";
+import { assertAdmin, assertAdminRead } from "./admin";
 import { DEFAULT_JJ_PCT, DEFAULT_KAREN_PCT } from "./lib/settlement";
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -128,11 +128,13 @@ export const byCode = query({
 
 export const list = query({
   args: {
+    adminToken: v.string(),
     status: v.optional(v.string()),
     fromISO: v.optional(v.string()),
     toISO: v.optional(v.string()),
   },
-  handler: async (ctx, { status, fromISO, toISO }) => {
+  handler: async (ctx, { adminToken, status, fromISO, toISO }) => {
+    await assertAdminRead(ctx, adminToken);
     const all = await ctx.db.query("reservations").order("desc").collect();
     return all.filter((r) => {
       if (status && r.status !== status) return false;
@@ -146,10 +148,12 @@ export const list = query({
 // Booking + bike + payments-summary view for the admin Bookings tab.
 export const listForAdmin = query({
   args: {
+    adminToken: v.string(),
     status: v.optional(v.string()),
     source: v.optional(v.string()),
   },
-  handler: async (ctx, { status, source }) => {
+  handler: async (ctx, { adminToken, status, source }) => {
+    await assertAdminRead(ctx, adminToken);
     const reservations = await ctx.db.query("reservations").order("desc").collect();
     const bikes = await ctx.db.query("bikes").collect();
     const payments = await ctx.db.query("payments").collect();

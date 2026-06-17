@@ -277,17 +277,17 @@ export function AdminScreen() {
     );
   }
 
-  const sectionProps = { year, monthIdx0, setYear, setMonth: setMonthIdx0 };
+  const sectionProps = { adminToken: token, year, monthIdx0, setYear, setMonth: setMonthIdx0 };
   let inner: React.ReactNode;
   switch (tab) {
     case "dashboard":   inner = <Dashboard {...sectionProps} />; break;
     case "bookings":    inner = <Bookings adminToken={token} />; break;
     case "motorcycles": inner = <Motorcycles adminToken={token} />; break;
-    case "revenue":     inner = <Revenue year={year} setYear={setYear} />; break;
-    case "payments":    inner = <Payments adminToken={token} {...sectionProps} />; break;
-    case "seasonality": inner = <Seasonality year={year} setYear={setYear} />; break;
-    case "settlement":  inner = <Settlement adminToken={token} {...sectionProps} />; break;
-    case "reports":     inner = <Reports year={year} setYear={setYear} />; break;
+    case "revenue":     inner = <Revenue adminToken={token} year={year} setYear={setYear} />; break;
+    case "payments":    inner = <Payments {...sectionProps} />; break;
+    case "seasonality": inner = <Seasonality adminToken={token} year={year} setYear={setYear} />; break;
+    case "settlement":  inner = <Settlement {...sectionProps} />; break;
+    case "reports":     inner = <Reports adminToken={token} year={year} setYear={setYear} />; break;
     case "settings":    inner = <Settings adminToken={token} />; break;
   }
   // `key={tab}` resets the boundary each time the user switches tabs so a

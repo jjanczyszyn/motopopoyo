@@ -12,13 +12,13 @@ interface Props { adminToken: string; }
 const STATUSES = ["active", "inactive", "maintenance", "sold"] as const;
 
 export function Motorcycles({ adminToken }: Props) {
-  const bikes = useQuery(api.bikes.listAll) ?? [];
+  const bikes = useQuery(api.bikes.listAll, { adminToken }) ?? [];
   const cfg = useQuery(api.config.get);
   const setStatus = useMutation(api.bikes.setStatus);
   const updateBike = useMutation(api.bikes.updateBike);
   const setRange = useMutation(api.availability.setRange);
   const clearDay = useMutation(api.availability.clearDay);
-  const availability = useQuery(api.availability.list, {});
+  const availability = useQuery(api.availability.list, { adminToken });
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

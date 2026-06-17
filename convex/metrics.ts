@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
+import { assertAdminRead } from "./admin";
 import {
   PaymentLike,
   daysInMonth,
@@ -52,8 +53,9 @@ function paymentReceivedInRange(
 }
 
 export const dashboard = query({
-  args: { fromISO: v.string(), toISO: v.string() },
-  handler: async (ctx, { fromISO, toISO: toEnd }) => {
+  args: { adminToken: v.string(), fromISO: v.string(), toISO: v.string() },
+  handler: async (ctx, { adminToken, fromISO, toISO: toEnd }) => {
+    await assertAdminRead(ctx, adminToken);
     const reservations = await ctx.db.query("reservations").collect();
     const payments = await ctx.db.query("payments").collect();
     const bikes = await ctx.db.query("bikes").collect();
@@ -155,8 +157,9 @@ export const dashboard = query({
 
 // Per-month revenue/rentals/occupancy for a calendar year.
 export const monthlySeries = query({
-  args: { year: v.number() },
-  handler: async (ctx, { year }) => {
+  args: { adminToken: v.string(), year: v.number() },
+  handler: async (ctx, { adminToken, year }) => {
+    await assertAdminRead(ctx, adminToken);
     const reservations = await ctx.db.query("reservations").collect();
     const payments = await ctx.db.query("payments").collect();
     const bikes = await ctx.db.query("bikes").collect();
@@ -227,8 +230,9 @@ export const monthlySeries = query({
 });
 
 export const motorcyclePerformance = query({
-  args: { fromISO: v.string(), toISO: v.string() },
-  handler: async (ctx, { fromISO, toISO: toEnd }) => {
+  args: { adminToken: v.string(), fromISO: v.string(), toISO: v.string() },
+  handler: async (ctx, { adminToken, fromISO, toISO: toEnd }) => {
+    await assertAdminRead(ctx, adminToken);
     const bikes = await ctx.db.query("bikes").collect();
     const reservations = await ctx.db.query("reservations").collect();
     const payments = await ctx.db.query("payments").collect();
@@ -303,8 +307,9 @@ export const motorcyclePerformance = query({
 
 // Per-bike monthly occupancy heatmap for a given year.
 export const seasonalityHeatmap = query({
-  args: { year: v.number() },
-  handler: async (ctx, { year }) => {
+  args: { adminToken: v.string(), year: v.number() },
+  handler: async (ctx, { adminToken, year }) => {
+    await assertAdminRead(ctx, adminToken);
     const bikes = await ctx.db.query("bikes").collect();
     const reservations = await ctx.db.query("reservations").collect();
     const availability = await ctx.db.query("motorcycleAvailability").collect();
@@ -344,8 +349,9 @@ export const seasonalityHeatmap = query({
 });
 
 export const paymentMethodSummary = query({
-  args: { fromISO: v.string(), toISO: v.string() },
-  handler: async (ctx, { fromISO, toISO: toEnd }) => {
+  args: { adminToken: v.string(), fromISO: v.string(), toISO: v.string() },
+  handler: async (ctx, { adminToken, fromISO, toISO: toEnd }) => {
+    await assertAdminRead(ctx, adminToken);
     const payments = await ctx.db.query("payments").collect();
     const cfg = await ctx.db.query("config").first();
 
@@ -409,8 +415,9 @@ export const paymentMethodSummary = query({
 
 // Booking source performance for the Bookings tab.
 export const sourcePerformance = query({
-  args: { fromISO: v.string(), toISO: v.string() },
-  handler: async (ctx, { fromISO, toISO: toEnd }) => {
+  args: { adminToken: v.string(), fromISO: v.string(), toISO: v.string() },
+  handler: async (ctx, { adminToken, fromISO, toISO: toEnd }) => {
+    await assertAdminRead(ctx, adminToken);
     const reservations = await ctx.db.query("reservations").collect();
     const payments = await ctx.db.query("payments").collect();
     const countable = reservations.filter((r) =>

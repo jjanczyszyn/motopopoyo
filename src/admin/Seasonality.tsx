@@ -6,11 +6,11 @@ import {
   tableWrap, tableStyle, thStyle, tdStyle,
 } from "./shared";
 
-interface Props { year: number; setYear: (y: number) => void; }
+interface Props { adminToken: string; year: number; setYear: (y: number) => void; }
 
-export function Seasonality({ year, setYear }: Props) {
-  const heat = useQuery(api.metrics.seasonalityHeatmap, { year });
-  const monthly = useQuery(api.metrics.monthlySeries, { year });
+export function Seasonality({ adminToken, year, setYear }: Props) {
+  const heat = useQuery(api.metrics.seasonalityHeatmap, { adminToken, year });
+  const monthly = useQuery(api.metrics.monthlySeries, { adminToken, year });
 
   const sortedMonths = React.useMemo(
     () => (monthly ?? []).slice().sort((a, b) => b.revenue - a.revenue),

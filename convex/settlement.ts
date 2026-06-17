@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { assertAdmin } from "./admin";
+import { assertAdmin, assertAdminRead } from "./admin";
 import {
   BookingSplitLookup,
   DEFAULT_JJ_PCT,
@@ -47,8 +47,9 @@ function inMonth(p: { receivedAt?: number; status: string }, ymOpt?: string) {
 }
 
 export const summary = query({
-  args: { settlementMonth: v.optional(v.string()) }, // 'YYYY-MM'
-  handler: async (ctx, { settlementMonth }) => {
+  args: { adminToken: v.string(), settlementMonth: v.optional(v.string()) }, // 'YYYY-MM'
+  handler: async (ctx, { adminToken, settlementMonth }) => {
+    await assertAdminRead(ctx, adminToken);
     const cfg = await ctx.db.query("config").first();
     const fallbackJj = cfg?.jjSharePercentage ?? DEFAULT_JJ_PCT;
     const fallbackKaren = cfg?.karenSharePercentage ?? DEFAULT_KAREN_PCT;
@@ -110,8 +111,9 @@ export const summary = query({
 });
 
 export const listTransfers = query({
-  args: { settlementMonth: v.optional(v.string()) },
-  handler: async (ctx, { settlementMonth }) => {
+  args: { adminToken: v.string(), settlementMonth: v.optional(v.string()) },
+  handler: async (ctx, { adminToken, settlementMonth }) => {
+    await assertAdminRead(ctx, adminToken);
     const all = await ctx.db.query("settlementTransfers").order("desc").collect();
     return settlementMonth
       ? all.filter((t) => t.settlementMonth === settlementMonth)

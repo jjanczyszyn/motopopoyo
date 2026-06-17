@@ -17,13 +17,13 @@ interface Props {
 
 export function Settlement({ adminToken, year, monthIdx0, setYear, setMonth }: Props) {
   const ym = `${year}-${String(monthIdx0 + 1).padStart(2, "0")}`;
-  const summary = useQuery(api.settlement.summary, { settlementMonth: ym });
-  const transfers = useQuery(api.settlement.listTransfers, { settlementMonth: ym });
+  const summary = useQuery(api.settlement.summary, { adminToken, settlementMonth: ym });
+  const transfers = useQuery(api.settlement.listTransfers, { adminToken, settlementMonth: ym });
   const removeTransfer = useMutation(api.settlement.removeTransfer);
   const [showTransfer, setShowTransfer] = React.useState(false);
 
-  const monthly12 = useQuery(api.metrics.monthlySeries, { year });
-  const yearly = useQuery(api.settlement.summary, {});
+  const monthly12 = useQuery(api.metrics.monthlySeries, { adminToken, year });
+  const yearly = useQuery(api.settlement.summary, { adminToken });
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

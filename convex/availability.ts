@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { assertAdmin } from "./admin";
+import { assertAdmin, assertAdminRead } from "./admin";
 
 const statusValidator = v.union(
   v.literal("maintenance"),
@@ -9,11 +9,13 @@ const statusValidator = v.union(
 
 export const list = query({
   args: {
+    adminToken: v.string(),
     bikeId: v.optional(v.id("bikes")),
     fromISO: v.optional(v.string()),
     toISO: v.optional(v.string()),
   },
-  handler: async (ctx, { bikeId, fromISO, toISO }) => {
+  handler: async (ctx, { adminToken, bikeId, fromISO, toISO }) => {
+    await assertAdminRead(ctx, adminToken);
     const all = await ctx.db.query("motorcycleAvailability").collect();
     return all.filter((row) => {
       if (bikeId && row.bikeId !== bikeId) return false;

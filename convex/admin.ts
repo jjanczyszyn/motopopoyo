@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query, MutationCtx } from "./_generated/server";
+import { mutation, query, MutationCtx, QueryCtx } from "./_generated/server";
 
 // Server-side admin auth. Each owner has their own password env var
 // (ADMIN_KAREN_PASSWORD / ADMIN_JJ_PASSWORD). Login takes a username +
@@ -81,6 +81,22 @@ export const logout = mutation({
     if (row) await ctx.db.delete(row._id);
   },
 });
+
+// Read-only variant for admin QUERIES (can't write, so it doesn't prune the
+// expired row — it just rejects). Use this to gate every query that returns
+// customer PII or financial data; without it those queries are world-readable
+// on the public Convex deployment.
+export async function assertAdminRead(ctx: QueryCtx, token: string) {
+  if (!token) throw new Error("Admin auth required.");
+  const row = await ctx.db
+    .query("adminSessions")
+    .withIndex("by_token", (q) => q.eq("token", token))
+    .first();
+  if (!row || row.expiresAt < Date.now()) {
+    throw new Error("Admin auth required.");
+  }
+  return row;
+}
 
 // Helper for admin mutations elsewhere in convex/. Throws if the token is
 // missing or expired. Returns the session row otherwise.

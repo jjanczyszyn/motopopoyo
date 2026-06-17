@@ -6,11 +6,12 @@ import {
   cardStyle, monthLabelLong,
 } from "./shared";
 
-interface Props { year: number; setYear: (y: number) => void; }
+interface Props { adminToken: string; year: number; setYear: (y: number) => void; }
 
-export function Revenue({ year, setYear }: Props) {
-  const monthly = useQuery(api.metrics.monthlySeries, { year });
+export function Revenue({ adminToken, year, setYear }: Props) {
+  const monthly = useQuery(api.metrics.monthlySeries, { adminToken, year });
   const performance = useQuery(api.metrics.motorcyclePerformance, {
+    adminToken,
     fromISO: `${year}-01-01`,
     toISO: `${year + 1}-01-01`,
   });
