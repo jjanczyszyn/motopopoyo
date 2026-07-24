@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # convex/_generated is gitignored — regenerate before typechecking.
+      - name: Generate Convex types
+        run: npx convex codegen --typecheck=disable
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # The OCR accuracy harness (fixtures/) needs downloaded tesseract models
+      # and runs for minutes — it stays a local-only check.
+      - name: Unit tests
+        run: npx vitest run --exclude 'fixtures/**' --exclude 'tests-local/**'
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_CONVEX_URL: https://tough-meadowlark-233.convex.cloud
