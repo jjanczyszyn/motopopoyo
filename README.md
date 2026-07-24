@@ -33,6 +33,46 @@ npm run build      # production bundle
 | Payments | Display-only contact details (Cash, Venmo, Zelle, PayPal, Wise, Revolut, Apple Pay, bank transfer). Confirmation happens out-of-band over WhatsApp. |
 | OCR | tesseract.js in-browser, parser at `src/lib/ocrParse.ts` (TD3 + TD1 MRZ + visual-zone heuristics) |
 
+## Pricing & seasons
+
+Two price lists live on the `config` row, and admin → Settings → **Season
+pricing** switches which one is live with one click:
+
+| Season | Per day | Per week | Per month |
+|---|---|---|---|
+| High | $20 | $120 | $450 |
+| Low | $18 | $108 | $405 |
+
+The weekly/monthly rates are proportional in both seasons — a week bills as
+6 days (~14% off) and a month as 22.5 days (25% off) — so switching seasons
+never distorts the long-rental discounts. Defaults and the derivation live in
+`convex/lib/season.ts`; editing a daily rate in admin re-derives the other two
+unless they are overridden by hand.
+
+`config.dailyRate / weeklyRate / monthlyRate` always hold the **active**
+season's rates, so the site, contract and booking maths read them unchanged.
+Existing reservations store the rate they were booked at and are unaffected by
+a season switch.
+
+## Google reviews
+
+The home page carousel is fed from the `reviews` table and shows each review's
+**actual publication date** (`publishedAt`), localised per language — never a
+"3 months ago" string, which freezes at fetch time and goes stale.
+
+`convex/reviews.ts:refresh` (daily cron, 12:00 UTC) pulls the latest reviews
+from the Google Places API (New) and upserts them by review id. It is a no-op
+until both Convex env vars are set:
+
+```
+npx convex env set --prod GOOGLE_PLACES_API_KEY <key>
+npx convex env set --prod GOOGLE_PLACE_ID <place id of the Google listing>
+npx convex run --prod reviews:refresh   # optional: sync immediately
+```
+
+Place Details returns up to 5 reviews per call, so rows accumulate — reviews
+Google stops returning are kept, never deleted.
+
 ## Deployment topology
 
 - **GitHub Pages**: workflow at `.github/workflows/deploy.yml` builds on push to `main` and serves `moto.popoyo.co` (custom domain, `public/CNAME`).

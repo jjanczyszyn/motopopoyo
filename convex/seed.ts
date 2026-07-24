@@ -1,4 +1,5 @@
 import { mutation } from "./_generated/server";
+import { DEFAULT_SEASON, DEFAULT_SEASON_RATES } from "./lib/season";
 
 export const all = mutation({
   args: {},
@@ -22,9 +23,11 @@ export const all = mutation({
     const cfg = await ctx.db.query("config").first();
     if (!cfg) {
       await ctx.db.insert("config", {
-        dailyRate: 20,
-        weeklyRate: 120,
-        monthlyRate: 450,
+        season: DEFAULT_SEASON,
+        seasonRates: DEFAULT_SEASON_RATES,
+        dailyRate: DEFAULT_SEASON_RATES[DEFAULT_SEASON].daily,
+        weeklyRate: DEFAULT_SEASON_RATES[DEFAULT_SEASON].weekly,
+        monthlyRate: DEFAULT_SEASON_RATES[DEFAULT_SEASON].monthly,
         deliveryStart: 7,
         deliveryEnd: 20,
         deposit: 100,
@@ -40,6 +43,22 @@ export const all = mutation({
       // Re-apply payment methods on every seed run so edits propagate without
       // a manual DB patch. Back-fill business defaults for older rows.
       const patch: Record<string, unknown> = { paymentMethods };
+      // Seasonal pricing back-fill: whatever rates the row already carries
+      // become the preset for the season it looks like, so seeding never
+      // changes the live price list.
+      if (cfg.season === undefined || cfg.seasonRates === undefined) {
+        const current = {
+          daily: cfg.dailyRate,
+          weekly: cfg.weeklyRate,
+          monthly: cfg.monthlyRate,
+        };
+        const season =
+          cfg.season ??
+          (current.daily <= DEFAULT_SEASON_RATES.low.daily ? "low" : "high");
+        patch.season = season;
+        patch.seasonRates =
+          cfg.seasonRates ?? { ...DEFAULT_SEASON_RATES, [season]: current };
+      }
       if (cfg.jjSharePercentage === undefined) patch.jjSharePercentage = 70;
       if (cfg.karenSharePercentage === undefined) patch.karenSharePercentage = 30;
       if (cfg.businessName === undefined) patch.businessName = "Karen & JJ Moto Rental";
@@ -60,26 +79,32 @@ export const all = mutation({
     }
 
     // reviews
-    // Real Google reviews (verbatim). Sort order in the carousel is by
-     // fetchedAt desc — we set fetchedAt below per review so the most recent
-     // ones surface first.
+    // Real Google reviews (verbatim), captured 2026-05-04. `publishedAt` is
+    // the actual post date — derived once from the relative age Google showed
+    // at capture time, so it stays put instead of drifting every day. The
+    // Places sync (reviews.refresh) overwrites these with Google's exact
+    // publishTime as soon as GOOGLE_PLACES_API_KEY is configured.
     const seedReviews = [
-      { googleId: "g-sean",                       name: "Sean",                          rating: 5, text: "Good prices, convenient and timely drop off and pick up, great bike. Highly recommended. Thanks!", when: "4 days ago",   ageDays: 4 },
-      { googleId: "g-leila-chan-currie",          name: "Leila Chan Currie",             rating: 5, text: "Super smooth and easy rental! Very happy with the moto I got, and the people were really sweet and helpful. A few of my friends also rented and had no issues either. Go for it!", when: "6 days ago",   ageDays: 6 },
-      { googleId: "g-paul-mala",                  name: "Paul MALA",                     rating: 5, text: "Great experience! The owners are accommodating and the vehicles are of excellent quality!", when: "2 months ago",  ageDays: 60 },
-      { googleId: "g-corentin-francois",          name: "Corentin FRANCOIS",             rating: 5, text: "Super responsive and accommodating, quality motorcycles. A big thank you for the recommendations and good advice, I highly recommend them!", when: "2 months ago",  ageDays: 62 },
-      { googleId: "g-joao-pedro-correa",          name: "João Pedro Corrêa dos Santos",  rating: 5, text: "Impeccable service and the motorcycle is also in excellent condition. They deliver the motorcycle to your accommodation with a full tank. Always attentive to anything you need.", when: "2 months ago",  ageDays: 64 },
-      { googleId: "g-jana-schilling",             name: "Jana Schilling",                rating: 5, text: "Highly recommend Karen's Moto Rental. Smooth process, excellent bike, and very kind people. They delivered the bike on time, came back for any adjustment I needed & were super helpful. One of the best rental experiences I've had. Thank you Karen & Dani!!", when: "3 months ago", ageDays: 90 },
-      { googleId: "g-melanie-velasquez-gallo",    name: "Melanie Velasquez Gallo",       rating: 5, text: "JJ and Karen are wonderful. They rented us their motorcycle, which was brand new and ran perfectly. Besides the excellent rental service, they took us to the bus stop and recommended a friend who could pick us up in Managua.", when: "5 months ago", ageDays: 150 },
-      { googleId: "g-katherinevanessa-tovalvega", name: "Katherinevanessa Tovalvega",    rating: 5, text: "The best rentals in Popoyo! Quality service. Highly recommend 😀😀", when: "8 months ago",      ageDays: 240 },
-      { googleId: "g-rotem-leibovitz",            name: "רותם ליבוביץ",                  rating: 5, text: "Dani is amazing guy, loyal and friendly! He helped me many times and his service was so good and nice! I am highly recommending to rent from Dani!", when: "9 months ago", ageDays: 270 },
-      { googleId: "g-guillaume-gelderblom",       name: "Guillaume Gelderblom",          rating: 5, text: "Good scooters, easy to ride, good communication with Karen. Was great and fun to travel around Popoyo. Muchas Gracias.", when: "9 months ago",  ageDays: 271 },
-      { googleId: "g-deric-cheng",                name: "Deric Cheng",                   rating: 5, text: "These motos were high quality, reliable, and the team was extremely responsive whenever I had any issues ☺️ Would strongly recommend!", when: "9 months ago",  ageDays: 272 },
-      { googleId: "g-lou-nkpa",                   name: "Lou Nkpa",                      rating: 5, text: "Great experience with them. It's a local family business with very reasonable prices and great service!", when: "9 months ago",  ageDays: 273 },
-      { googleId: "g-animatronik-eventos",        name: "Animatronik Eventos",           rating: 5, text: "Impeccable service. They delivered my motorcycle and picked it up from Hacienda Iguana immediately and at no extra cost.", when: "9 months ago",  ageDays: 274 },
-      { googleId: "g-harel-elyakim",              name: "הראל אליקים",                   rating: 5, text: "Highest level of service available. Highly recommended!", when: "9 months ago",  ageDays: 275 },
-      { googleId: "g-yuval-elboim",               name: "יובל אלבוים",                   rating: 5, text: "Excellent bikes, good owners, highly recommended", when: "9 months ago",  ageDays: 276 },
-      { googleId: "g-roei-taieb",                 name: "Roei Taieb",                    rating: 5, text: "Perfect, the best motorcycle for Popoyo 🙌", when: "9 months ago",  ageDays: 277 },
+      // Added 2026-07-24 from the Google listing; shown there as "2 months
+      // ago", so the date is accurate to within a couple of weeks until the
+      // Places sync replaces it with the exact publishTime.
+      { googleId: "g-franziska-koch",              name: "Franziska Koch",                rating: 5, text: "I really recommend renting motorbikes from Karen & JJ. The bikes are in really good condition, they brought the bike to our hostel and are really friendly and helpful people. Prices are also good.", date: "2026-05-25" },
+      { googleId: "g-sean",                    name: "Sean",                          rating: 5, text: "Good prices, convenient and timely drop off and pick up, great bike. Highly recommended. Thanks!", date: "2026-04-30" },
+      { googleId: "g-leila-chan-currie",          name: "Leila Chan Currie",             rating: 5, text: "Super smooth and easy rental! Very happy with the moto I got, and the people were really sweet and helpful. A few of my friends also rented and had no issues either. Go for it!", date: "2026-04-28" },
+      { googleId: "g-paul-mala",                  name: "Paul MALA",                     rating: 5, text: "Great experience! The owners are accommodating and the vehicles are of excellent quality!", date: "2026-03-05" },
+      { googleId: "g-corentin-francois",          name: "Corentin FRANCOIS",             rating: 5, text: "Super responsive and accommodating, quality motorcycles. A big thank you for the recommendations and good advice, I highly recommend them!", date: "2026-03-03" },
+      { googleId: "g-joao-pedro-correa",          name: "João Pedro Corrêa dos Santos",  rating: 5, text: "Impeccable service and the motorcycle is also in excellent condition. They deliver the motorcycle to your accommodation with a full tank. Always attentive to anything you need.", date: "2026-03-01" },
+      { googleId: "g-jana-schilling",             name: "Jana Schilling",                rating: 5, text: "Highly recommend Karen's Moto Rental. Smooth process, excellent bike, and very kind people. They delivered the bike on time, came back for any adjustment I needed & were super helpful. One of the best rental experiences I've had. Thank you Karen & Dani!!", date: "2026-02-03" },
+      { googleId: "g-melanie-velasquez-gallo",    name: "Melanie Velasquez Gallo",       rating: 5, text: "JJ and Karen are wonderful. They rented us their motorcycle, which was brand new and ran perfectly. Besides the excellent rental service, they took us to the bus stop and recommended a friend who could pick us up in Managua.", date: "2025-12-05" },
+      { googleId: "g-katherinevanessa-tovalvega", name: "Katherinevanessa Tovalvega",    rating: 5, text: "The best rentals in Popoyo! Quality service. Highly recommend 😀😀", date: "2025-09-06" },
+      { googleId: "g-rotem-leibovitz",            name: "רותם ליבוביץ",                  rating: 5, text: "Dani is amazing guy, loyal and friendly! He helped me many times and his service was so good and nice! I am highly recommending to rent from Dani!", date: "2025-08-07" },
+      { googleId: "g-guillaume-gelderblom",       name: "Guillaume Gelderblom",          rating: 5, text: "Good scooters, easy to ride, good communication with Karen. Was great and fun to travel around Popoyo. Muchas Gracias.", date: "2025-08-06" },
+      { googleId: "g-deric-cheng",                name: "Deric Cheng",                   rating: 5, text: "These motos were high quality, reliable, and the team was extremely responsive whenever I had any issues ☺️ Would strongly recommend!", date: "2025-08-05" },
+      { googleId: "g-lou-nkpa",                   name: "Lou Nkpa",                      rating: 5, text: "Great experience with them. It's a local family business with very reasonable prices and great service!", date: "2025-08-04" },
+      { googleId: "g-animatronik-eventos",        name: "Animatronik Eventos",           rating: 5, text: "Impeccable service. They delivered my motorcycle and picked it up from Hacienda Iguana immediately and at no extra cost.", date: "2025-08-03" },
+      { googleId: "g-harel-elyakim",              name: "הראל אליקים",                   rating: 5, text: "Highest level of service available. Highly recommended!", date: "2025-08-02" },
+      { googleId: "g-yuval-elboim",               name: "יובל אלבוים",                   rating: 5, text: "Excellent bikes, good owners, highly recommended", date: "2025-08-01" },
+      { googleId: "g-roei-taieb",                 name: "Roei Taieb",                    rating: 5, text: "Perfect, the best motorcycle for Popoyo 🙌", date: "2025-07-31" },
     ];
     const NOW = Date.now();
     const wantedIds = new Set(seedReviews.map((r) => r.googleId));
@@ -92,16 +117,22 @@ export const all = mutation({
     }
 
     for (const r of seedReviews) {
-      const { ageDays, ...row } = r;
-      const fetchedAt = NOW - ageDays * 86400000;
+      const { date, ...row } = r;
+      const publishedAt = Date.parse(`${date}T12:00:00Z`);
       const existing = await ctx.db
         .query("reviews")
         .withIndex("by_googleId", (q) => q.eq("googleId", r.googleId))
         .first();
       if (existing) {
-        await ctx.db.patch(existing._id, { ...row, fetchedAt });
+        // Drop the stale relative string on rows written before publishedAt.
+        await ctx.db.patch(existing._id, {
+          ...row,
+          publishedAt,
+          when: undefined,
+          fetchedAt: NOW,
+        });
       } else {
-        await ctx.db.insert("reviews", { ...row, fetchedAt });
+        await ctx.db.insert("reviews", { ...row, publishedAt, fetchedAt: NOW });
       }
     }
 
