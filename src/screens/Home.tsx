@@ -13,8 +13,23 @@ type Review = {
   name: string;
   rating: number;
   text: string;
-  when: string;
+  publishedAt?: number;
+  when?: string;
 };
+
+// Reviews show the date they were actually posted ("12 March 2026"), never a
+// relative "3 months ago" string — those are frozen at fetch time and go
+// stale. `when` is the legacy field and only survives on un-refreshed rows.
+function reviewDate(r: Review, intlLocale: string): string {
+  if (typeof r.publishedAt === "number" && Number.isFinite(r.publishedAt)) {
+    return new Date(r.publishedAt).toLocaleDateString(intlLocale, {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  }
+  return r.when ?? "";
+}
 
 function useIsMobile(): boolean {
   const [mob, setMob] = React.useState(() =>
@@ -30,7 +45,7 @@ function useIsMobile(): boolean {
 }
 
 function ReviewCard({ r, mobile }: { r: Review; mobile: boolean }) {
-  const { t } = useI18n();
+  const { t, intlLocale } = useI18n();
   return (
     <div style={{
       // Mobile: 86% of viewport width, snap-centred — original carousel feel.
@@ -56,7 +71,7 @@ function ReviewCard({ r, mobile }: { r: Review; mobile: boolean }) {
           }}>{r.name.split(" ").map(s => s[0]).join("").slice(0,2)}</div>
           <div>
             <div style={{ fontSize: 13, fontWeight: 600 }}>{r.name}</div>
-            <div style={{ fontSize: 11, color: "var(--muted)" }}>{r.when}</div>
+            <div style={{ fontSize: 11, color: "var(--muted)" }}>{reviewDate(r, intlLocale)}</div>
           </div>
         </div>
         <StarsRow />

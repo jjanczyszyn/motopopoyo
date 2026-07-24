@@ -3,9 +3,26 @@ import { v } from "convex/values";
 
 export default defineSchema({
   config: defineTable({
+    // Effective rates for the *active* season — every consumer reads these.
+    // Switching seasons rewrites them from `seasonRates` (see lib/season.ts).
     dailyRate: v.number(),
     weeklyRate: v.number(),
     monthlyRate: v.number(),
+    season: v.optional(v.union(v.literal("high"), v.literal("low"))),
+    seasonRates: v.optional(
+      v.object({
+        high: v.object({
+          daily: v.number(),
+          weekly: v.number(),
+          monthly: v.number(),
+        }),
+        low: v.object({
+          daily: v.number(),
+          weekly: v.number(),
+          monthly: v.number(),
+        }),
+      })
+    ),
     deliveryStart: v.number(),
     deliveryEnd: v.number(),
     deposit: v.number(),
@@ -185,7 +202,12 @@ export default defineSchema({
     name: v.string(),
     rating: v.number(),
     text: v.string(),
-    when: v.string(),
+    // When the reviewer actually posted it (epoch ms). The site renders a real
+    // date from this — never a "N days ago" string, which goes stale the day
+    // after it is written. `when` is the legacy relative string, kept only so
+    // older rows still validate.
+    publishedAt: v.optional(v.number()),
+    when: v.optional(v.string()),
     profilePic: v.optional(v.string()),
     fetchedAt: v.number(),
   })
