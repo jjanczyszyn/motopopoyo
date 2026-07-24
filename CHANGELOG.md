@@ -14,6 +14,8 @@
   `publishTime`. Activates once `GOOGLE_PLACES_API_KEY` and `GOOGLE_PLACE_ID`
   are set in the Convex environment; a no-op otherwise.
 
+- New 5-star Google review (Franziska Koch, May 2026) added to the seed.
+
 ### Changed
 - Reviews on the home page show the **real publication date** (e.g.
   "30 April 2026", localised) instead of a hard-coded "4 days ago" string that

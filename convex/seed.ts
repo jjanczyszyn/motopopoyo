@@ -85,7 +85,11 @@ export const all = mutation({
     // Places sync (reviews.refresh) overwrites these with Google's exact
     // publishTime as soon as GOOGLE_PLACES_API_KEY is configured.
     const seedReviews = [
-      { googleId: "g-sean",                       name: "Sean",                          rating: 5, text: "Good prices, convenient and timely drop off and pick up, great bike. Highly recommended. Thanks!", date: "2026-04-30" },
+      // Added 2026-07-24 from the Google listing; shown there as "2 months
+      // ago", so the date is accurate to within a couple of weeks until the
+      // Places sync replaces it with the exact publishTime.
+      { googleId: "g-franziska-koch",              name: "Franziska Koch",                rating: 5, text: "I really recommend renting motorbikes from Karen & JJ. The bikes are in really good condition, they brought the bike to our hostel and are really friendly and helpful people. Prices are also good.", date: "2026-05-25" },
+      { googleId: "g-sean",                    name: "Sean",                          rating: 5, text: "Good prices, convenient and timely drop off and pick up, great bike. Highly recommended. Thanks!", date: "2026-04-30" },
       { googleId: "g-leila-chan-currie",          name: "Leila Chan Currie",             rating: 5, text: "Super smooth and easy rental! Very happy with the moto I got, and the people were really sweet and helpful. A few of my friends also rented and had no issues either. Go for it!", date: "2026-04-28" },
       { googleId: "g-paul-mala",                  name: "Paul MALA",                     rating: 5, text: "Great experience! The owners are accommodating and the vehicles are of excellent quality!", date: "2026-03-05" },
       { googleId: "g-corentin-francois",          name: "Corentin FRANCOIS",             rating: 5, text: "Super responsive and accommodating, quality motorcycles. A big thank you for the recommendations and good advice, I highly recommend them!", date: "2026-03-03" },
