@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import {
   btnPrimary, btnGhost, inputStyle, labelStyle, cardStyle, tableWrap, tableStyle,
-  thStyle, tdStyle,
+  thStyle, tdStyle, useIsMobile,
 } from "./shared";
 import {
   DEFAULT_SEASON, DEFAULT_SEASON_RATES, SEASONS, SEASON_LABEL,
@@ -27,6 +27,7 @@ export function Settings({ adminToken }: Props) {
   const [msg, setMsg] = React.useState("");
   const [err, setErr] = React.useState("");
   const initialised = React.useRef(false);
+  const mobile = useIsMobile();
 
   React.useEffect(() => {
     if (!cfg || initialised.current) return;
@@ -61,7 +62,7 @@ export function Settings({ adminToken }: Props) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <h2 style={{ margin: 0, fontSize: 22 }}>Settings</h2>
+      {!mobile && <h2 style={{ margin: 0, fontSize: 22 }}>Settings</h2>}
 
       <SeasonPricing adminToken={adminToken} cfg={cfg} />
 
@@ -82,6 +83,31 @@ export function Settings({ adminToken }: Props) {
         </div>
       </div>
 
+      {mobile ? (
+        <div style={cardStyle}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>
+            Default payment-method collector
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {(cfg?.paymentMethods ?? []).map((m) => (
+              <div key={m.id} style={{ borderTop: "1px solid var(--line-2)", paddingTop: 10 }}>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{m.label}</div>
+                <select
+                  value={m.defaultCollector ?? "manual"}
+                  onChange={(e) =>
+                    setCollector({ adminToken, methodId: m.id, defaultCollector: e.target.value as any })
+                  }
+                  style={{ ...inputStyle, width: "100%", marginTop: 6 }}
+                >
+                  <option value="JJ">JJ</option>
+                  <option value="Karen">Karen</option>
+                  <option value="manual">Manual</option>
+                </select>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
       <div style={tableWrap}>
         <div style={{ padding: "10px 12px", background: "#fafafa", borderBottom: "1px solid var(--line)", fontWeight: 600, fontSize: 13 }}>
           Default payment-method collector
@@ -118,6 +144,7 @@ export function Settings({ adminToken }: Props) {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }

@@ -21,3 +21,9 @@ fixtures/preprocessed/
 
 # tesseract.js decompresses model caches into CWD when the harness runs
 /*.traineddata
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/

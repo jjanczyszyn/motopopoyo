@@ -335,6 +335,155 @@ export class SectionErrorBoundary extends React.Component<
   }
 }
 
+// Responsive modal. On a phone it fills the screen as a sheet with its own
+// sticky header and footer, so the primary action sits under the thumb and
+// there is always a visible way out (PWA standalone has no browser Back).
+// On desktop it stays a centred dialog.
+export function ModalShell({
+  title, onClose, children, footer,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+}) {
+  const mobile = useIsMobile();
+
+  // Escape closes on desktop; the sheet header handles it on touch.
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 60,
+        display: "flex",
+        alignItems: mobile ? "flex-end" : "center",
+        justifyContent: "center",
+        padding: mobile ? 0 : 20,
+      }}
+    >
+      <div style={{
+        background: "#fff",
+        width: "100%",
+        maxWidth: mobile ? "none" : 480,
+        maxHeight: mobile ? "100dvh" : "calc(100dvh - 40px)",
+        height: mobile ? "100dvh" : undefined,
+        borderRadius: mobile ? 0 : 14,
+        display: "flex",
+        flexDirection: "column",
+        paddingTop: mobile ? "env(safe-area-inset-top, 0px)" : 0,
+      }}>
+        <div style={{
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          gap: 12, padding: mobile ? "12px 16px" : "18px 20px 12px",
+          borderBottom: mobile ? "1px solid var(--line)" : "none",
+          flex: "0 0 auto",
+        }}>
+          <strong style={{ fontSize: mobile ? 17 : 15 }}>{title}</strong>
+          <button style={btnGhost} onClick={onClose} aria-label="Close">Close</button>
+        </div>
+
+        <div style={{
+          flex: "1 1 auto", overflowY: "auto", WebkitOverflowScrolling: "touch",
+          padding: mobile ? "14px 16px" : "0 20px",
+        }}>
+          {children}
+        </div>
+
+        {footer && (
+          <div style={{
+            flex: "0 0 auto",
+            display: "flex", gap: 8, justifyContent: "flex-end",
+            padding: mobile ? "12px 16px" : "12px 20px 18px",
+            borderTop: mobile ? "1px solid var(--line)" : "none",
+            paddingBottom: mobile
+              ? "calc(12px + env(safe-area-inset-bottom, 0px))"
+              : undefined,
+            background: "#fff",
+          }}>
+            {footer}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Floating primary action for phones — sits above the bottom tab bar, within
+// thumb reach, instead of in the far top-right corner.
+export function MobileFab({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        position: "fixed",
+        right: 16,
+        bottom: "calc(72px + env(safe-area-inset-bottom, 0px))",
+        zIndex: 20,
+        padding: "14px 20px",
+        borderRadius: 999,
+        border: "none",
+        background: "var(--accent)",
+        color: "var(--accent-ink)",
+        fontSize: 15,
+        fontWeight: 700,
+        boxShadow: "0 6px 20px rgba(0,0,0,0.18)",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+// One record rendered as a label/value card — the mobile stand-in for a table
+// row. `fields` keeps the column order readable at 360px wide.
+export function RecordCard({
+  title, subtitle, fields, actions,
+}: {
+  title: React.ReactNode;
+  subtitle?: React.ReactNode;
+  fields: { label: string; value: React.ReactNode }[];
+  actions?: React.ReactNode;
+}) {
+  return (
+    <div style={mobileCard}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 700, fontSize: 14 }}>{title}</div>
+          {subtitle && (
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{subtitle}</div>
+          )}
+        </div>
+        {actions}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        {fields.map((f) => (
+          <div key={f.label}>
+            <div style={mobileLabel}>{f.label}</div>
+            <div style={mobileValue}>{f.value}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function EmptyState({ message }: { message: string }) {
+  return (
+    <div style={{ ...mobileCard, textAlign: "center", color: "var(--muted)", fontSize: 13 }}>
+      {message}
+    </div>
+  );
+}
+
 // Confirmable button — reduces accidental destructive clicks.
 export function ConfirmButton({
   label, confirmLabel = "Confirm?", onConfirm, style,

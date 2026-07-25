@@ -6,7 +6,8 @@ import {
   StatusPill, fmtUSD, fmtPct, fmtDate, btnPrimary, btnGhost, inputStyle,
   labelStyle, tableWrap, tableStyle, thStyle, tdStyle, monthBoundsISO,
   monthLabelLong, PARTNERS, PAYMENT_TYPES, PAYMENT_STATUSES, ConfirmButton,
-  cardStyle, useIsMobile, mobileCard, mobileLabel, mobileValue,
+  cardStyle, useIsMobile, mobileCard, mobileLabel, mobileValue, ModalShell,
+  RecordCard, EmptyState,
 } from "./shared";
 import { Doc } from "../../convex/_generated/dataModel";
 
@@ -16,6 +17,73 @@ interface Props {
   monthIdx0: number;
   setYear: (y: number) => void;
   setMonth: (m: number) => void;
+}
+
+// Money changes hands when the bike does, so the default action is a single
+// tap that books the whole outstanding balance to the rental's start day.
+// "Custom…" opens the full form for part payments, odd methods or dates.
+function AwaitingPayment({
+  adminToken, onCustom,
+}: {
+  adminToken: string;
+  onCustom: (id: Id<"reservations">) => void;
+}) {
+  const rows = useQuery(api.reservations.listForAdmin, { adminToken });
+  const markPaid = useMutation(api.payments.markPaid);
+  const [busyId, setBusyId] = React.useState<string | null>(null);
+  const [err, setErr] = React.useState("");
+
+  const outstanding = (rows ?? [])
+    .filter((r) => r.status !== "cancelled" && r.balance > 0)
+    .sort((a, b) => a.startDate.localeCompare(b.startDate));
+
+  if (rows && outstanding.length === 0) return null;
+
+  return (
+    <div style={cardStyle}>
+      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
+        Awaiting payment ({outstanding.length})
+      </div>
+      <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>
+        One tap records the balance as received on the rental's start date.
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {outstanding.map((r) => (
+          <div key={r._id} style={{
+            display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+            padding: "10px 0", borderTop: "1px solid var(--line-2)",
+          }}>
+            <div style={{ flex: "1 1 160px", minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>
+                {r.docFirstName} {r.docLastName}
+              </div>
+              <div style={{ fontSize: 11, color: "var(--muted)" }}>
+                {fmtDate(r.startDate)} · {r.code} · {r.payMethod}
+              </div>
+            </div>
+            <button
+              style={{ ...btnPrimary, background: "var(--ok)" }}
+              disabled={busyId === r._id}
+              onClick={async () => {
+                setBusyId(r._id); setErr("");
+                try {
+                  await markPaid({ adminToken, reservationId: r._id });
+                } catch (e) {
+                  setErr((e as Error).message);
+                } finally {
+                  setBusyId(null);
+                }
+              }}
+            >
+              {busyId === r._id ? "Saving…" : `Mark paid · ${fmtUSD(r.balance)}`}
+            </button>
+            <button style={btnGhost} onClick={() => onCustom(r._id)}>Custom…</button>
+          </div>
+        ))}
+      </div>
+      {err && <div style={{ color: "#b91c1c", fontSize: 12, marginTop: 8 }}>{err}</div>}
+    </div>
+  );
 }
 
 export function Payments({ adminToken, year, monthIdx0, setYear, setMonth }: Props) {
@@ -37,7 +105,8 @@ export function Payments({ adminToken, year, monthIdx0, setYear, setMonth }: Pro
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <header style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <h2 style={{ margin: 0, fontSize: 22 }}>Payments</h2>
+        {/* The mobile shell already shows the section name in its header. */}
+        {!mobile && <h2 style={{ margin: 0, fontSize: 22 }}>Payments</h2>}
         <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
           <select value={monthIdx0} onChange={(e) => setMonth(parseInt(e.target.value))} style={inputStyle}>
             {monthLabelLong.map((m, i) => (<option key={m} value={i}>{m}</option>))}
@@ -50,6 +119,26 @@ export function Payments({ adminToken, year, monthIdx0, setYear, setMonth }: Pro
 
       <div style={cardStyle}>
         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Payment method summary</div>
+        {mobile ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {(summary?.rows ?? []).map((row) => (
+              <RecordCard
+                key={row.method}
+                title={row.label}
+                subtitle={`${fmtPct(row.percent)} of revenue · ${row.count} payment${row.count === 1 ? "" : "s"}`}
+                fields={[
+                  { label: "Amount", value: <strong>{fmtUSD(row.amount)}</strong> },
+                  { label: "Default", value: row.defaultCollector ?? "—" },
+                  { label: "JJ", value: fmtUSD(row.jjAmount) },
+                  { label: "Karen", value: fmtUSD(row.karenAmount) },
+                ]}
+              />
+            ))}
+            {summary && summary.rows.length === 0 && (
+              <EmptyState message="No payments this month." />
+            )}
+          </div>
+        ) : (
         <div style={{ overflowX: "auto", margin: "0 -16px", padding: "0 16px" }}>
           <table style={tableStyle}>
             <thead>
@@ -81,27 +170,12 @@ export function Payments({ adminToken, year, monthIdx0, setYear, setMonth }: Pro
             </tbody>
           </table>
         </div>
+        )}
       </div>
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontSize: 14, fontWeight: 600 }}>Payments this month</div>
-        <select
-          onChange={(e) => {
-            const id = e.target.value;
-            if (id) setRecordFor(id as Id<"reservations">);
-            e.target.value = "";
-          }}
-          style={inputStyle}
-          defaultValue=""
-        >
-          <option value="">+ Record payment for…</option>
-          {(reservations ?? []).map((r) => (
-            <option key={r._id} value={r._id}>
-              {r.code} · {r.docFirstName} {r.docLastName} · {fmtUSD(r.totalUSD)}
-            </option>
-          ))}
-        </select>
-      </div>
+      <AwaitingPayment adminToken={adminToken} onCustom={setRecordFor} />
+
+      <div style={{ fontSize: 14, fontWeight: 600 }}>Payments this month</div>
 
       {mobile ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -284,15 +358,17 @@ export function RecordPaymentModal({
   };
 
   return (
-    <div style={{
-      position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
-      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60, padding: 20,
-    }}>
-      <div style={{ background: "#fff", borderRadius: 14, padding: 20, maxWidth: 520, width: "100%" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <strong>Record payment for {r.code}</strong>
-          <button style={btnGhost} onClick={onClose}>Close</button>
-        </div>
+    <ModalShell
+      title={`Record payment for ${r.code}`}
+      onClose={onClose}
+      footer={
+        <>
+          <button style={btnGhost} onClick={onClose}>Cancel</button>
+          <button style={btnPrimary} onClick={submit} disabled={busy}>{busy ? "Saving…" : "Record"}</button>
+        </>
+      }
+    >
+      <div>
         <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 8 }}>
           {r.docFirstName} {r.docLastName} · {fmtUSD(r.totalUSD)} total · {r.days} days
         </div>
@@ -328,12 +404,8 @@ export function RecordPaymentModal({
           <input value={notes} onChange={(e) => setNotes(e.target.value)} style={{ ...inputStyle, width: "100%" }} />
         </Field>
         {err && <div style={{ color: "#b91c1c", fontSize: 12, marginTop: 8 }}>{err}</div>}
-        <div style={{ marginTop: 12, display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <button style={btnGhost} onClick={onClose}>Cancel</button>
-          <button style={btnPrimary} onClick={submit} disabled={busy}>{busy ? "Saving…" : "Record"}</button>
-        </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }
 
@@ -404,15 +476,17 @@ export function EditPaymentModal({
   };
 
   return (
-    <div style={{
-      position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
-      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 70, padding: 20,
-    }}>
-      <div style={{ background: "#fff", borderRadius: 14, padding: 20, maxWidth: 520, width: "100%", maxHeight: "90vh", overflow: "auto" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <strong>Edit payment{r ? ` · ${r.code}` : ""}</strong>
-          <button style={btnGhost} onClick={onClose}>Close</button>
-        </div>
+    <ModalShell
+      title={`Edit payment${r ? ` · ${r.code}` : ""}`}
+      onClose={onClose}
+      footer={
+        <>
+          <button style={btnGhost} onClick={onClose}>Cancel</button>
+          <button style={btnPrimary} onClick={submit} disabled={busy}>{busy ? "Saving…" : "Save changes"}</button>
+        </>
+      }
+    >
+      <div>
         {r && (
           <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 8 }}>
             {r.docFirstName} {r.docLastName} · {fmtUSD(r.totalUSD)} total · {r.days} days
@@ -450,12 +524,8 @@ export function EditPaymentModal({
           <input value={notes} onChange={(e) => setNotes(e.target.value)} style={{ ...inputStyle, width: "100%" }} />
         </Field>
         {err && <div style={{ color: "#b91c1c", fontSize: 12, marginTop: 8 }}>{err}</div>}
-        <div style={{ marginTop: 12, display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <button style={btnGhost} onClick={onClose}>Cancel</button>
-          <button style={btnPrimary} onClick={submit} disabled={busy}>{busy ? "Saving…" : "Save changes"}</button>
-        </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }
 

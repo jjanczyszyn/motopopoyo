@@ -47,12 +47,18 @@ export const updateBusiness = mutation({
     await assertAdmin(ctx, adminToken);
     const cfg = await ctx.db.query("config").first();
     if (!cfg) throw new Error("Config row missing — run seed.all first.");
+    // Validate against the stored values when only one side is being edited —
+    // otherwise saving "JJ 80" alone would leave the pair at 80/30.
+    const nextJj = patch.jjSharePercentage ?? cfg.jjSharePercentage ?? 70;
+    const nextKaren = patch.karenSharePercentage ?? cfg.karenSharePercentage ?? 30;
     if (
-      patch.jjSharePercentage !== undefined &&
-      patch.karenSharePercentage !== undefined &&
-      patch.jjSharePercentage + patch.karenSharePercentage !== 100
+      (patch.jjSharePercentage !== undefined ||
+        patch.karenSharePercentage !== undefined) &&
+      nextJj + nextKaren !== 100
     ) {
-      throw new Error("JJ + Karen share must equal 100%.");
+      throw new Error(
+        `JJ + Karen share must equal 100% (got ${nextJj} + ${nextKaren}).`
+      );
     }
     const next: Record<string, unknown> = {};
     for (const [k, val] of Object.entries(patch)) {

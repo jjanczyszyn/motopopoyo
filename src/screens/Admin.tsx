@@ -247,6 +247,117 @@ const TAB_LABELS: Record<Tab, string> = {
   settings: "Settings",
 };
 
+// Phone nav: the four daily jobs get a permanent bottom tab, everything else
+// lives behind "More". A 9-tab horizontal scroller meant the active tab could
+// start off-screen and nothing was ever in thumb reach.
+const PRIMARY_TABS: Tab[] = ["dashboard", "bookings", "payments", "motorcycles"];
+const MORE_TABS: Tab[] = TABS.filter((t) => !PRIMARY_TABS.includes(t));
+
+const SHORT_LABELS: Partial<Record<Tab, string>> = {
+  dashboard: "Home",
+  motorcycles: "Motos",
+  settlement: "Settlement",
+};
+const shortLabel = (t: Tab) => SHORT_LABELS[t] ?? TAB_LABELS[t];
+
+const TAB_ICONS: Record<Tab, string> = {
+  dashboard: "◈",
+  bookings: "▤",
+  payments: "$",
+  motorcycles: "◍",
+  revenue: "◔",
+  seasonality: "▦",
+  settlement: "⇄",
+  reports: "⇩",
+  settings: "⚙",
+};
+
+function BottomNav({
+  tab, setTab,
+}: { tab: Tab; setTab: (t: Tab) => void }) {
+  const [moreOpen, setMoreOpen] = React.useState(false);
+  const moreActive = MORE_TABS.includes(tab);
+
+  const item = (t: Tab | "more", active: boolean, onClick: () => void) => (
+    <button
+      key={t}
+      onClick={onClick}
+      aria-current={active ? "page" : undefined}
+      // Explicit name: the visible label is abbreviated ("Motos") and sits
+      // next to a decorative glyph, which makes a poor accessible name.
+      aria-label={t === "more" ? "More sections" : TAB_LABELS[t]}
+      style={{
+        flex: 1,
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        gap: 3, padding: "8px 2px", border: "none", background: "transparent",
+        color: active ? "var(--ink)" : "var(--muted)",
+        fontSize: 10.5, fontWeight: 600, letterSpacing: 0.2,
+        minWidth: 0,
+      }}
+    >
+      <span style={{ fontSize: 17, lineHeight: 1 }}>
+        {t === "more" ? "⋯" : TAB_ICONS[t]}
+      </span>
+      <span style={{ maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {t === "more" ? (moreActive ? shortLabel(tab) : "More") : shortLabel(t)}
+      </span>
+      <span style={{
+        height: 2, width: 18, borderRadius: 2,
+        background: active ? "var(--accent)" : "transparent",
+      }} />
+    </button>
+  );
+
+  return (
+    <>
+      {moreOpen && (
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setMoreOpen(false); }}
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 40,
+            display: "flex", alignItems: "flex-end",
+          }}
+        >
+          <div style={{
+            background: "#fff", width: "100%", borderRadius: "16px 16px 0 0",
+            padding: 12,
+            paddingBottom: "calc(12px + env(safe-area-inset-bottom, 0px))",
+          }}>
+            <div style={{
+              width: 36, height: 4, borderRadius: 2, background: "var(--line)",
+              margin: "0 auto 12px",
+            }} />
+            {MORE_TABS.map((t) => (
+              <button
+                key={t}
+                onClick={() => { setTab(t); setMoreOpen(false); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 12, width: "100%",
+                  padding: "14px 12px", border: "none", borderRadius: 10,
+                  background: tab === t ? "#f5f5f5" : "transparent",
+                  color: "var(--ink)", fontSize: 15, fontWeight: 600, textAlign: "left",
+                }}
+              >
+                <span style={{ fontSize: 18, width: 22 }}>{TAB_ICONS[t]}</span>
+                {TAB_LABELS[t]}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <nav style={{
+        position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 45,
+        display: "flex", alignItems: "stretch",
+        background: "#fff", borderTop: "1px solid var(--line)",
+        paddingBottom: "env(safe-area-inset-bottom, 0px)",
+      }}>
+        {PRIMARY_TABS.map((t) => item(t, tab === t, () => { setMoreOpen(false); setTab(t); }))}
+        {item("more", moreActive, () => setMoreOpen((v) => !v))}
+      </nav>
+    </>
+  );
+}
+
 export function AdminScreen() {
   const { authed, token, tryPassword, logout, session } = useAdminAuth();
   const [tab, setTab] = React.useState<Tab>(() => {
@@ -258,6 +369,19 @@ export function AdminScreen() {
     if (tab) window.location.hash = tab;
   }, [tab]);
 
+  // Follow the hash when it changes underneath us — browser Back/Forward, a
+  // deep link pasted into the address bar, or another tab's link. Without
+  // this the URL and the visible section drift apart, and in PWA standalone
+  // mode (no browser chrome) there is no other way back to a section.
+  React.useEffect(() => {
+    const onHashChange = () => {
+      const next = window.location.hash.replace(/^#/, "");
+      if ((TABS as readonly string[]).includes(next)) setTab(next as Tab);
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+
   const today = new Date();
   const [year, setYear] = React.useState(today.getFullYear());
   const [monthIdx0, setMonthIdx0] = React.useState(today.getMonth());
@@ -267,7 +391,7 @@ export function AdminScreen() {
     // Mirror the scroll-container treatment so the gate is centred and
     // scrollable on short viewports.
     return (
-      <div style={{
+      <div className="admin-root" style={{
         height: "100dvh", overflowY: "auto", overflowX: "hidden",
         WebkitOverflowScrolling: "touch", background: "#fff",
       }}>
@@ -305,23 +429,31 @@ export function AdminScreen() {
     // customer flow. The admin panel is a normal long-scroll page, so we
     // force this container to be the scroll context: full viewport height
     // with internal overflow-y auto + iOS momentum scrolling.
-    <div style={{
+    <div className="admin-root" style={{
       height: "100dvh",
       overflowY: "auto",
       overflowX: "hidden",
       WebkitOverflowScrolling: "touch",
       background: "#fafafa",
-      paddingBottom: "calc(60px + env(safe-area-inset-bottom, 0px))",
+      // Room for the fixed bottom tab bar on phones.
+      paddingBottom: mobile
+        ? "calc(84px + env(safe-area-inset-bottom, 0px))"
+        : "calc(60px + env(safe-area-inset-bottom, 0px))",
     }}>
       <header style={{
         display: "flex", justifyContent: "space-between", alignItems: "center",
         padding: mobile ? "12px 16px" : "16px 24px",
+        paddingTop: mobile
+          ? "calc(12px + env(safe-area-inset-top, 0px))"
+          : undefined,
         borderBottom: "1px solid var(--line)",
         background: "#fff", flexWrap: "wrap", gap: 12,
         position: "sticky", top: 0, zIndex: 10,
       }}>
         <div>
-          <div style={{ fontSize: mobile ? 18 : 22, fontWeight: 700 }}>Karen & JJ Admin</div>
+          <div style={{ fontSize: mobile ? 18 : 22, fontWeight: 700 }}>
+            {mobile ? TAB_LABELS[tab] : "Karen & JJ Admin"}
+          </div>
           {!mobile && (
             <div style={{ fontSize: 12, color: "var(--muted)" }}>Business cockpit</div>
           )}
@@ -338,36 +470,38 @@ export function AdminScreen() {
           }}>{mobile && username ? `Sign out (${username})` : "Sign out"}</button>
         </div>
       </header>
-      <nav style={{
-        display: "flex", gap: 4,
-        padding: mobile ? "8px 12px" : "8px 24px",
-        borderBottom: "1px solid var(--line)", background: "#fff",
-        overflowX: "auto", whiteSpace: "nowrap",
-        WebkitOverflowScrolling: "touch",
-        position: "sticky", top: mobile ? 56 : 70, zIndex: 9,
-      }}>
-        {TABS.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            style={{
-              padding: "8px 14px", borderRadius: 8, border: "none",
-              background: tab === t ? "var(--ink)" : "transparent",
-              color: tab === t ? "#fff" : "var(--ink-2)",
-              fontSize: 13, fontWeight: 600, cursor: "pointer",
-              flex: "0 0 auto",
-            }}
-          >
-            {TAB_LABELS[t]}
-          </button>
-        ))}
-      </nav>
+      {!mobile && (
+        <nav style={{
+          display: "flex", gap: 4,
+          padding: "8px 24px",
+          borderBottom: "1px solid var(--line)", background: "#fff",
+          overflowX: "auto", whiteSpace: "nowrap",
+          position: "sticky", top: 70, zIndex: 9,
+        }}>
+          {TABS.map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              style={{
+                padding: "8px 14px", borderRadius: 8, border: "none",
+                background: tab === t ? "var(--ink)" : "transparent",
+                color: tab === t ? "#fff" : "var(--ink-2)",
+                fontSize: 13, fontWeight: 600, cursor: "pointer",
+                flex: "0 0 auto",
+              }}
+            >
+              {TAB_LABELS[t]}
+            </button>
+          ))}
+        </nav>
+      )}
       <main style={{
         maxWidth: 1180, margin: "0 auto",
         padding: mobile ? "16px 12px" : "24px 20px",
       }}>
         {body}
       </main>
+      {mobile && <BottomNav tab={tab} setTab={setTab} />}
     </div>
   );
 }

@@ -136,13 +136,19 @@ export const updateBike = mutation({
     image: v.optional(v.string()),
     dailyRate: v.optional(v.number()),
     notes: v.optional(v.string()),
+    // Emptying the per-bike rate field in admin means "fall back to the global
+    // rate". A plain `dailyRate: undefined` can't say that — it is
+    // indistinguishable from "not editing this field" — so the caller sets
+    // this flag instead.
+    clearDailyRate: v.optional(v.boolean()),
   },
-  handler: async (ctx, { adminToken, bikeId, ...patch }) => {
+  handler: async (ctx, { adminToken, bikeId, clearDailyRate, ...patch }) => {
     await assertAdmin(ctx, adminToken);
     const next: Record<string, unknown> = {};
     for (const [k, val] of Object.entries(patch)) {
       if (val !== undefined) next[k] = val;
     }
+    if (clearDailyRate) next.dailyRate = undefined;
     await ctx.db.patch(bikeId, next);
   },
 });
