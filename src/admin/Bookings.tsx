@@ -6,7 +6,7 @@ import {
   StatusPill, fmtUSD, fmtDate, fmtDateShort, btnPrimary, btnGhost, inputStyle,
   labelStyle, tableWrap, tableStyle, thStyle, tdStyle, RESERVATION_STATUSES,
   SOURCE_OPTIONS, isoToday, ConfirmButton, useIsMobile, mobileCard, mobileLabel,
-  mobileValue,
+  mobileValue, cardStyle, MobileFab, ModalShell,
 } from "./shared";
 import { RecordPaymentModal, PaymentStatusEditor, EditPaymentModal } from "./Payments";
 import type { Doc as ConvexDoc } from "../../convex/_generated/dataModel";
@@ -139,6 +139,7 @@ export function Bookings({ adminToken }: Props) {
   const [statusFilter, setStatusFilter] = React.useState<string>("");
   const [sourceFilter, setSourceFilter] = React.useState<string>("");
   const [showNew, setShowNew] = React.useState(false);
+  const [showFilters, setShowFilters] = React.useState(false);
   const [editing, setEditing] = React.useState<Id<"reservations"> | null>(null);
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
 
@@ -226,6 +227,155 @@ export function Bookings({ adminToken }: Props) {
   const mobile = useIsMobile();
   const visibleCols = ALL_COLUMNS.filter((c) => visibleColumns.has(c.id));
 
+  // On a phone the filter row used to push the actual bookings below the fold,
+  // so it collapses behind a "Filters" disclosure that reports how many are on.
+  const activeFilters =
+    (statusFilter ? 1 : 0) + (sourceFilter ? 1 : 0) + (hideCancelled ? 1 : 0);
+
+  const mobileList = (
+    <>
+      {(bookings ?? []).map((r) => {
+        const isOpen = expanded.has(r._id);
+        return (
+          <div key={r._id} style={mobileCard}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 15 }}>{r.docFirstName} {r.docLastName}</div>
+                <div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "JetBrains Mono, monospace" }}>{r.code}</div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                <StatusPill status={r.status} />
+                <StatusPill status={r.payStatus} />
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <div>
+                <div style={mobileLabel}>Moto</div>
+                <div style={mobileValue}>{shortBikeLabel(r.bike)}</div>
+              </div>
+              <div>
+                <div style={mobileLabel}>Dates</div>
+                <div style={mobileValue}>{fmtDate(r.startDate)} → {fmtDate(r.endDate)}</div>
+              </div>
+              <div>
+                <div style={mobileLabel}>Total</div>
+                <div style={mobileValue}>{fmtUSD(r.totalUSD)} <span style={{ color: "var(--muted)", fontSize: 11 }}>· {r.days}d</span></div>
+              </div>
+              <div>
+                <div style={mobileLabel}>Paid</div>
+                <div style={mobileValue}>{fmtUSD(r.paid)}</div>
+              </div>
+              <div>
+                <div style={mobileLabel}>Payment</div>
+                <div style={mobileValue}>{payMethodLabel(r.payMethod)}</div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+              <MarkPaidButton
+                reservationId={r._id}
+                outstanding={r.totalUSD - r.paid}
+                adminToken={adminToken}
+                full
+              />
+              <select
+                value={r.status}
+                onChange={(e) => setStatus({ id: r._id, status: e.target.value as any, adminToken })}
+                style={{ ...inputStyle, flex: 1, minWidth: 120 }}
+              >
+                {RESERVATION_STATUSES.map((s) => (<option key={s} value={s}>{s}</option>))}
+              </select>
+              <button style={btnGhost} onClick={() => setEditing(r._id)}>Edit</button>
+              <button style={btnGhost} onClick={() => toggleExpanded(r._id)}>
+                {isOpen ? "Hide payments" : "Payments"}
+              </button>
+            </div>
+            {isOpen && (
+              <div style={{ marginTop: 4, paddingTop: 10, borderTop: "1px solid var(--line-2)" }}>
+                <BookingPaymentsPanel reservationId={r._id} adminToken={adminToken} />
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {bookings && bookings.length === 0 && (
+        <div style={{ ...mobileCard, textAlign: "center", color: "var(--muted)" }}>
+          No bookings match these filters.
+        </div>
+      )}
+    </>
+  );
+
+  if (mobile) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button
+            type="button"
+            onClick={() => setShowFilters((v) => !v)}
+            style={{ ...(activeFilters ? btnPrimary : btnGhost), flex: "0 0 auto" }}
+          >
+            Filters{activeFilters ? ` (${activeFilters})` : ""}
+          </button>
+          <select
+            value={`${sortBy}:${sortDir}`}
+            onChange={(e) => {
+              const [id, dir] = e.target.value.split(":") as [ColumnId, "asc" | "desc"];
+              setSortBy(id);
+              setSortDir(dir);
+            }}
+            style={{ ...inputStyle, flex: 1, minWidth: 0 }}
+          >
+            {ALL_COLUMNS.filter((c) => c.sortable).flatMap((c) => [
+              <option key={`${c.id}:desc`} value={`${c.id}:desc`}>{c.label} (desc)</option>,
+              <option key={`${c.id}:asc`} value={`${c.id}:asc`}>{c.label} (asc)</option>,
+            ])}
+          </select>
+        </div>
+
+        {showFilters && (
+          <div style={{ ...cardStyle, display: "flex", flexDirection: "column", gap: 8 }}>
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={inputStyle}>
+              <option value="">All statuses</option>
+              {RESERVATION_STATUSES.map((s) => (<option key={s} value={s}>{s}</option>))}
+            </select>
+            <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} style={inputStyle}>
+              <option value="">All sources</option>
+              {SOURCE_OPTIONS.map((s) => (<option key={s} value={s}>{s.replace("_", " ")}</option>))}
+            </select>
+            <button
+              type="button"
+              onClick={() => setHideCancelled((v) => !v)}
+              aria-pressed={hideCancelled}
+              style={hideCancelled ? btnPrimary : btnGhost}
+            >
+              {hideCancelled ? "✓ " : ""}Hide cancelled
+              {hideCancelled && cancelledHidden > 0 ? ` (${cancelledHidden})` : ""}
+            </button>
+          </div>
+        )}
+
+        {/* Extra bottom room so the floating "+ New booking" button never
+            sits on top of the last card's actions. */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingBottom: 72 }}>
+          {mobileList}
+        </div>
+
+        <MobileFab label="+ New booking" onClick={() => setShowNew(true)} />
+
+        {showNew && (
+          <NewBookingForm adminToken={adminToken} onClose={() => setShowNew(false)} />
+        )}
+        {editing && (
+          <EditBookingForm
+            reservationId={editing}
+            adminToken={adminToken}
+            onClose={() => setEditing(null)}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <header style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -306,92 +456,6 @@ export function Bookings({ adminToken }: Props) {
         />
       )}
 
-      {mobile && (
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <span style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600 }}>Sort</span>
-          <select
-            value={`${sortBy}:${sortDir}`}
-            onChange={(e) => {
-              const [id, dir] = e.target.value.split(":") as [ColumnId, "asc" | "desc"];
-              setSortBy(id);
-              setSortDir(dir);
-            }}
-            style={{ ...inputStyle, fontSize: 12, padding: "6px 8px" }}
-          >
-            {ALL_COLUMNS.filter((c) => c.sortable).flatMap((c) => [
-              <option key={`${c.id}:desc`} value={`${c.id}:desc`}>{c.label} (desc)</option>,
-              <option key={`${c.id}:asc`} value={`${c.id}:asc`}>{c.label} (asc)</option>,
-            ])}
-          </select>
-        </div>
-      )}
-
-      {mobile ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {(bookings ?? []).map((r) => {
-            const isOpen = expanded.has(r._id);
-            return (
-              <div key={r._id} style={mobileCard}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 15 }}>{r.docFirstName} {r.docLastName}</div>
-                    <div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "JetBrains Mono, monospace" }}>{r.code}</div>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-                    <StatusPill status={r.status} />
-                    <StatusPill status={r.payStatus} />
-                  </div>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                  <div>
-                    <div style={mobileLabel}>Moto</div>
-                    <div style={mobileValue}>{shortBikeLabel(r.bike)}</div>
-                  </div>
-                  <div>
-                    <div style={mobileLabel}>Dates</div>
-                    <div style={mobileValue}>{fmtDate(r.startDate)} → {fmtDate(r.endDate)}</div>
-                  </div>
-                  <div>
-                    <div style={mobileLabel}>Total</div>
-                    <div style={mobileValue}>{fmtUSD(r.totalUSD)} <span style={{ color: "var(--muted)", fontSize: 11 }}>· {r.days}d</span></div>
-                  </div>
-                  <div>
-                    <div style={mobileLabel}>Paid</div>
-                    <div style={mobileValue}>{fmtUSD(r.paid)}</div>
-                  </div>
-                  <div>
-                    <div style={mobileLabel}>Payment</div>
-                    <div style={mobileValue}>{payMethodLabel(r.payMethod)}</div>
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                  <select
-                    value={r.status}
-                    onChange={(e) => setStatus({ id: r._id, status: e.target.value as any, adminToken })}
-                    style={{ ...inputStyle, fontSize: 12, padding: "6px 8px", flex: 1, minWidth: 110 }}
-                  >
-                    {RESERVATION_STATUSES.map((s) => (<option key={s} value={s}>{s}</option>))}
-                  </select>
-                  <button style={btnGhost} onClick={() => setEditing(r._id)}>Edit</button>
-                  <button style={btnGhost} onClick={() => toggleExpanded(r._id)}>
-                    {isOpen ? "Hide payments" : "Payments"}
-                  </button>
-                </div>
-                {isOpen && (
-                  <div style={{ marginTop: 4, paddingTop: 10, borderTop: "1px solid var(--line-2)" }}>
-                    <BookingPaymentsPanel reservationId={r._id} adminToken={adminToken} />
-                  </div>
-                )}
-              </div>
-            );
-          })}
-          {bookings && bookings.length === 0 && (
-            <div style={{ ...mobileCard, textAlign: "center", color: "var(--muted)" }}>
-              No bookings match these filters.
-            </div>
-          )}
-        </div>
-      ) : (
       <div style={tableWrap}>
         <table style={tableStyle}>
           <thead>
@@ -446,7 +510,12 @@ export function Bookings({ adminToken }: Props) {
                       </td>
                     ))}
                     <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
-                      <div style={{ display: "flex", gap: 4 }}>
+                      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                        <MarkPaidButton
+                          reservationId={r._id}
+                          outstanding={r.totalUSD - r.paid}
+                          adminToken={adminToken}
+                        />
                         <button style={btnGhost} onClick={() => setEditing(r._id)}>Edit</button>
                         <StatusActions r={r} onChange={(s) => setStatus({ id: r._id, status: s, adminToken })} />
                       </div>
@@ -474,7 +543,6 @@ export function Bookings({ adminToken }: Props) {
           </tbody>
         </table>
       </div>
-      )}
 
       {editing && (
         <EditBookingForm
@@ -484,6 +552,50 @@ export function Bookings({ adminToken }: Props) {
         />
       )}
     </div>
+  );
+}
+
+// One tap logs the whole outstanding balance as received on the rental's
+// start day, using the booking's own payment method. Everything unusual is a
+// second tap away in "Payments" on the row, where the entry can be edited.
+function MarkPaidButton({
+  reservationId, outstanding, adminToken, full,
+}: {
+  reservationId: Id<"reservations">;
+  outstanding: number;
+  adminToken: string;
+  full?: boolean;
+}) {
+  const markPaid = useMutation(api.payments.markPaid);
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState("");
+
+  if (outstanding <= 0) return null;
+
+  return (
+    <>
+      <button
+        style={{
+          ...btnPrimary,
+          background: "var(--ok)",
+          ...(full ? { flex: 1, minWidth: 140 } : {}),
+        }}
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true); setErr("");
+          try {
+            await markPaid({ adminToken, reservationId });
+          } catch (e) {
+            setErr((e as Error).message);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        {busy ? "Saving…" : `Mark paid · ${fmtUSD(outstanding)}`}
+      </button>
+      {err && <div style={{ color: "#b91c1c", fontSize: 11, width: "100%" }}>{err}</div>}
+    </>
   );
 }
 
@@ -634,15 +746,17 @@ function EditBookingForm({
     }
   };
   return (
-    <div style={{
-      position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
-      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 20,
-    }}>
-      <div style={{ background: "#fff", borderRadius: 14, padding: 20, maxWidth: 700, width: "100%", maxHeight: "90vh", overflow: "auto" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-          <strong>Edit booking {r.code}</strong>
-          <button style={btnGhost} onClick={onClose}>Close</button>
-        </div>
+    <ModalShell
+      title={`Edit booking ${r.code}`}
+      onClose={onClose}
+      footer={
+        <>
+          <button style={btnGhost} onClick={onClose}>Cancel</button>
+          <button style={btnPrimary} onClick={submit} disabled={busy}>{busy ? "Saving…" : "Save changes"}</button>
+        </>
+      }
+    >
+      <div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))", gap: 10 }}>
           <Field label="Customer name"><input value={customerName} onChange={(e) => setCustomerName(e.target.value)} style={inputStyle} /></Field>
           <Field label="Phone (+CC)"><input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} type="tel" inputMode="tel" autoComplete="tel" style={inputStyle} /></Field>
@@ -659,16 +773,12 @@ function EditBookingForm({
           <Field label="Notes"><input value={notes} onChange={(e) => setNotes(e.target.value)} style={inputStyle} /></Field>
         </div>
         {err && <div style={{ color: "#b91c1c", fontSize: 12, marginTop: 8 }}>{err}</div>}
-        <div style={{ marginTop: 12, display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <button style={btnGhost} onClick={onClose}>Cancel</button>
-          <button style={btnPrimary} disabled={busy} onClick={submit}>{busy ? "Saving…" : "Save booking"}</button>
-        </div>
 
         <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid var(--line)" }}>
           <BookingPaymentsPanel reservationId={reservationId} adminToken={adminToken} />
         </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }
 

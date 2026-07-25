@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { outstanding, receivedTotal } from "./lib/balance";
 import { assertAdmin, assertAdminRead } from "./admin";
 import { DEFAULT_JJ_PCT, DEFAULT_KAREN_PCT } from "./lib/settlement";
 
@@ -109,6 +110,72 @@ export const record = mutation({
       createdAt: now,
       updatedAt: now,
     });
+  },
+});
+
+// One-tap "the customer paid". Covers the overwhelmingly common case: the
+// whole outstanding balance changes hands on the day the rental starts, in
+// the method the booking already names, collected by whoever normally
+// receives that method. Anything unusual (part payment, different method,
+// another day) is handled by editing the payment afterwards.
+export const markPaid = mutation({
+  args: {
+    adminToken: v.string(),
+    reservationId: v.id("reservations"),
+  },
+  handler: async (ctx, { adminToken, reservationId }) => {
+    await assertAdmin(ctx, adminToken);
+    const reservation = await ctx.db.get(reservationId);
+    if (!reservation) throw new Error("Reservation not found.");
+
+    const existing = await ctx.db
+      .query("payments")
+      .withIndex("by_reservation", (q) => q.eq("reservationId", reservationId))
+      .collect();
+    const alreadyPaid = receivedTotal(existing);
+    const due = outstanding(reservation.totalUSD, existing);
+    if (due <= 0) throw new Error("This booking is already fully paid.");
+
+    const cfg = await ctx.db.query("config").first();
+    const method = reservation.payMethod;
+    const methodCfg = cfg?.paymentMethods.find((m) => m.id === method);
+    // "manual" means nobody is the standing collector for that method, so we
+    // fall back to JJ and let the operator correct it in the edit sheet.
+    const collectedBy =
+      methodCfg?.defaultCollector === "Karen" ? "Karen" : "JJ";
+
+    // Midday UTC on the start date: the money changes hands when the bike
+    // does, and midday keeps the date stable either side of the timezone.
+    const startMs = Date.parse(`${reservation.startDate}T12:00:00Z`);
+    const receivedAt = Number.isFinite(startMs) ? startMs : Date.now();
+
+    const now = Date.now();
+    const jjPct = reservation.jjSharePct ?? cfg?.jjSharePercentage ?? DEFAULT_JJ_PCT;
+    const karenPct = reservation.karenSharePct ?? cfg?.karenSharePercentage ?? DEFAULT_KAREN_PCT;
+    if (
+      reservation.jjSharePct === undefined ||
+      reservation.karenSharePct === undefined
+    ) {
+      await ctx.db.patch(reservation._id, {
+        jjSharePct: jjPct,
+        karenSharePct: karenPct,
+        updatedAt: now,
+      });
+    }
+
+    const paymentId = await ctx.db.insert("payments", {
+      reservationId,
+      amount: due,
+      currency: "USD",
+      method,
+      collectedBy,
+      paymentType: alreadyPaid > 0 ? "balance" : "full_payment",
+      status: "received",
+      receivedAt,
+      createdAt: now,
+      updatedAt: now,
+    });
+    return { paymentId, amount: due, collectedBy, receivedAt };
   },
 });
 

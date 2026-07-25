@@ -73,6 +73,35 @@ npx convex run --prod reviews:refresh   # optional: sync immediately
 Place Details returns up to 5 reviews per call, so rows accumulate — reviews
 Google stops returning are kept, never deleted.
 
+## Admin panel
+
+`moto.popoyo.co/admin` — operator tool for Karen and JJ, used mostly one-handed
+on a phone while a customer waits, and installable as a PWA.
+
+- **Phones** get a fixed bottom tab bar (Home · Bookings · Payments · Motos ·
+  More), a floating "+ New booking" button in thumb reach, card layouts in
+  place of side-scrolling tables, and full-screen modal sheets. Controls are
+  ≥44px and fields render at 16px so iOS doesn't zoom on focus (see the
+  `.admin-root` rules in `index.html` — they need `!important` because every
+  control is styled inline).
+- **Recording a payment is one tap.** "Mark paid · $X" books the whole
+  outstanding balance on the rental's start date with the booking's payment
+  method and that method's default collector (`payments.markPaid`). Custom
+  amounts, methods or dates go through "Custom…" / "Edit".
+- Desktop keeps the wide tables, the column picker and the top tab row.
+
+## Testing
+
+| Command | What it runs |
+|---|---|
+| `npm test` | Unit tests (vitest) — pricing, seasons, balances, OCR parsing, dates, phones |
+| `npm run test:e2e` | End-to-end (Playwright) against a production build, desktop + iPhone |
+| `npm run test:ocr` | OCR accuracy harness — slow, local only |
+
+CI (`.github/workflows/ci.yml`) runs typecheck, unit tests, build and the e2e
+suite on every pull request. The signed-in admin e2e specs are skipped unless
+`E2E_ADMIN_USER` / `E2E_ADMIN_PASSWORD` are set (locally, or as repo secrets).
+
 ## Deployment topology
 
 - **GitHub Pages**: workflow at `.github/workflows/deploy.yml` builds on push to `main` and serves `moto.popoyo.co` (custom domain, `public/CNAME`).

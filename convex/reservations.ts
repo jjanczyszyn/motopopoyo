@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { computeTotal, daysBetweenISO } from "./lib/pricing";
+import { outstanding, payStatusFor, receivedTotal } from "./lib/balance";
 import { assertAdmin, assertAdminRead } from "./admin";
 import { DEFAULT_JJ_PCT, DEFAULT_KAREN_PCT } from "./lib/settlement";
 
@@ -169,25 +170,9 @@ export const listForAdmin = query({
         const reservationPayments = payments.filter(
           (p) => p.reservationId === r._id
         );
-        let paid = 0;
-        for (const p of reservationPayments) {
-          if (p.status !== "received") continue;
-          paid += p.paymentType === "refund" ? -p.amount : p.amount;
-        }
-        const balance = Math.max(0, r.totalUSD - paid);
-        let payStatus: "unpaid" | "partial" | "paid" | "overpaid" | "refunded";
-        if (paid <= 0) payStatus = "unpaid";
-        else if (paid < r.totalUSD) payStatus = "partial";
-        else if (paid > r.totalUSD) payStatus = "overpaid";
-        else payStatus = "paid";
-        if (
-          reservationPayments.some(
-            (p) => p.status === "received" && p.paymentType === "refund"
-          ) &&
-          paid <= 0
-        ) {
-          payStatus = "refunded";
-        }
+        const paid = receivedTotal(reservationPayments);
+        const balance = Math.max(0, outstanding(r.totalUSD, reservationPayments));
+        const payStatus = payStatusFor(r.totalUSD, reservationPayments);
         return {
           ...r,
           bike: bike

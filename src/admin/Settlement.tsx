@@ -4,7 +4,8 @@ import { api } from "../../convex/_generated/api";
 import {
   StatCard, btnPrimary, btnGhost, fmtUSD, fmtUSD0, inputStyle, labelStyle,
   cardStyle, tableWrap, tableStyle, thStyle, tdStyle, monthLabelLong,
-  PARTNERS, ConfirmButton, isoToday,
+  PARTNERS, ConfirmButton, isoToday, useIsMobile, ModalShell, RecordCard,
+  EmptyState,
 } from "./shared";
 
 interface Props {
@@ -24,11 +25,12 @@ export function Settlement({ adminToken, year, monthIdx0, setYear, setMonth }: P
 
   const monthly12 = useQuery(api.metrics.monthlySeries, { adminToken, year });
   const yearly = useQuery(api.settlement.summary, { adminToken });
+  const mobile = useIsMobile();
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <header style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <h2 style={{ margin: 0, fontSize: 22 }}>Partner settlement</h2>
+        {!mobile && <h2 style={{ margin: 0, fontSize: 22 }}>Partner settlement</h2>}
         <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
           <select value={monthIdx0} onChange={(e) => setMonth(parseInt(e.target.value))} style={inputStyle}>
             {monthLabelLong.map((m, i) => (<option key={m} value={i}>{m}</option>))}
@@ -53,6 +55,25 @@ export function Settlement({ adminToken, year, monthIdx0, setYear, setMonth }: P
 
       <div style={cardStyle}>
         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>By payment method · {monthLabelLong[monthIdx0]} {year}</div>
+        {mobile ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {(summary?.paymentMethodBreakdown ?? []).map((row) => (
+              <RecordCard
+                key={row.method}
+                title={row.method}
+                subtitle={`${row.count} payment${row.count === 1 ? "" : "s"}`}
+                fields={[
+                  { label: "Amount", value: fmtUSD(row.amount) },
+                  { label: "JJ collected", value: fmtUSD(row.collectedBy.JJ) },
+                  { label: "Karen collected", value: fmtUSD(row.collectedBy.Karen) },
+                ]}
+              />
+            ))}
+            {summary && summary.paymentMethodBreakdown.length === 0 && (
+              <EmptyState message="No payments this month." />
+            )}
+          </div>
+        ) : (
         <div style={{ overflowX: "auto", margin: "0 -16px", padding: "0 16px", WebkitOverflowScrolling: "touch" }}>
         <table style={tableStyle}>
           <thead>
@@ -80,12 +101,40 @@ export function Settlement({ adminToken, year, monthIdx0, setYear, setMonth }: P
           </tbody>
         </table>
         </div>
+        )}
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <div style={{ fontSize: 14, fontWeight: 600 }}>Transfers ({monthLabelLong[monthIdx0]} {year})</div>
-        <button style={btnPrimary} onClick={() => setShowTransfer(true)}>+ Record settlement transfer</button>
+        <button
+          style={{ ...btnPrimary, ...(mobile ? { width: "100%", padding: "12px 16px", fontSize: 15 } : {}) }}
+          onClick={() => setShowTransfer(true)}
+        >
+          + Record settlement transfer
+        </button>
       </div>
+      {mobile ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {(transfers ?? []).map((t) => (
+            <RecordCard
+              key={t._id}
+              title={`${t.fromPartner} → ${t.toPartner}`}
+              subtitle={t.notes ? `${t.date} · ${t.notes}` : t.date}
+              fields={[
+                { label: "Amount", value: <strong>{fmtUSD(t.amount)}</strong> },
+                { label: "Method", value: t.method },
+              ]}
+              actions={
+                <ConfirmButton label="Delete" confirmLabel="Sure?"
+                  onConfirm={() => removeTransfer({ adminToken, id: t._id })} />
+              }
+            />
+          ))}
+          {transfers && transfers.length === 0 && (
+            <EmptyState message="No transfers yet." />
+          )}
+        </div>
+      ) : (
       <div style={tableWrap}>
         <table style={tableStyle}>
           <thead>
@@ -119,6 +168,7 @@ export function Settlement({ adminToken, year, monthIdx0, setYear, setMonth }: P
           </tbody>
         </table>
       </div>
+      )}
 
       {showTransfer && (
         <RecordTransferModal
@@ -200,15 +250,17 @@ function RecordTransferModal({
   };
 
   return (
-    <div style={{
-      position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
-      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60, padding: 20,
-    }}>
-      <div style={{ background: "#fff", borderRadius: 14, padding: 20, maxWidth: 480, width: "100%" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-          <strong>Record settlement transfer</strong>
-          <button style={btnGhost} onClick={onClose}>Close</button>
-        </div>
+    <ModalShell
+      title="Record settlement transfer"
+      onClose={onClose}
+      footer={
+        <>
+          <button style={btnGhost} onClick={onClose}>Cancel</button>
+          <button style={btnPrimary} onClick={submit} disabled={busy}>{busy ? "Saving…" : "Record"}</button>
+        </>
+      }
+    >
+      <div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))", gap: 10 }}>
           <Field label="From">
             <select value={from} onChange={(e) => setFrom(e.target.value as any)} style={inputStyle}>
@@ -237,12 +289,8 @@ function RecordTransferModal({
           <input value={notes} onChange={(e) => setNotes(e.target.value)} style={{ ...inputStyle, width: "100%" }} />
         </Field>
         {err && <div style={{ color: "#b91c1c", fontSize: 12, marginTop: 8 }}>{err}</div>}
-        <div style={{ marginTop: 12, display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <button style={btnGhost} onClick={onClose}>Cancel</button>
-          <button style={btnPrimary} onClick={submit} disabled={busy}>{busy ? "Saving…" : "Record"}</button>
-        </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }
 

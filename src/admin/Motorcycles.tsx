@@ -55,7 +55,12 @@ export function Motorcycles({ adminToken }: Props) {
                     placeholder={String(cfg?.dailyRate ?? 20)}
                     defaultValue={b.dailyRate ?? ""}
                     onBlur={(e) => {
-                      const v = e.target.value === "" ? undefined : parseFloat(e.target.value);
+                      if (e.target.value === "") {
+                        updateBike({ adminToken, bikeId: b._id, clearDailyRate: true });
+                        return;
+                      }
+                      const v = parseFloat(e.target.value);
+                      if (!Number.isFinite(v)) return;
                       updateBike({ adminToken, bikeId: b._id, dailyRate: v });
                     }}
                     style={inputStyle}

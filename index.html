@@ -68,6 +68,26 @@
   }
   button { font-family: inherit; cursor: pointer; }
   input, textarea, select { font-family: inherit; }
+
+  /* Admin panel, touch devices. The operators use this one-handed on a phone
+     while a customer waits, so:
+     - 16px minimum on fields, otherwise iOS Safari zooms the whole page on
+       focus and they have to pinch back out after every entry;
+     - 44px minimum hit area on anything tappable (WCAG / HIG target size).
+     Scoped to .admin-root so the customer-facing flow keeps its own scale. */
+  @media (pointer: coarse) {
+    /* !important because every control in the admin is styled inline (shared
+       inputStyle sets font-size: 13), and inline styles otherwise win. */
+    .admin-root input,
+    .admin-root select,
+    .admin-root textarea {
+      font-size: 16px !important;
+      min-height: 44px;
+    }
+    .admin-root button { min-height: 44px; }
+    /* Opt-out for genuinely secondary inline controls (row "Clear" links). */
+    .admin-root .tap-sm { min-height: 32px; }
+  }
   ::-webkit-scrollbar { width: 0; height: 0; }
   .phone-scroll { scrollbar-width: none; }
   .phone-scroll::-webkit-scrollbar { display: none; }
@@ -95,6 +115,9 @@
   // EU cookie consent banner (GA4 Consent Mode). Shown until the visitor chooses.
   (function () {
     if (localStorage.getItem('ga_consent')) return;
+    // Not on /admin: it's an internal operator tool, not a public page, and
+    // the bar is fixed to the bottom — exactly where the admin tab bar lives.
+    if (location.pathname.indexOf('/admin') === 0) return;
     function choose(v) {
       try { localStorage.setItem('ga_consent', v); } catch (e) {}
       if (typeof gtag === 'function') gtag('consent', 'update', { ad_storage: v, ad_user_data: v, ad_personalization: v, analytics_storage: v });
