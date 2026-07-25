@@ -1,4 +1,4 @@
-# Session handoff — 2026-07-25
+# Session handoff — 2026-07-25 (updated 01:00 UTC)
 
 ## What this is
 
@@ -40,6 +40,35 @@ Convex split).
 - **Reviews show real dates.** Each row stores `publishedAt`; the home page
   renders a localised date instead of the old frozen "N days ago" strings.
   17 reviews seeded, newest first.
+
+## Admin panel (rebuilt for phones this session)
+
+- Bottom tab bar on phones, floating "+ New booking", collapsible filters,
+  card layouts instead of side-scrolling tables, full-screen modal sheets,
+  16px fields / 44px tap targets (`.admin-root` rules in `index.html` — they
+  need `!important`, every control is styled inline).
+- **Recording a payment is one tap**: `payments.markPaid` books the whole
+  outstanding balance on the rental's start date with the booking's own
+  method. Custom cases go through "Custom…" / "Edit".
+- Balance arithmetic lives in `convex/lib/balance.ts` — shared by the booking
+  list and the payment writer, so displayed and written amounts can't drift.
+- `ADMIN_DESIGN_SPEC.md` (untracked, repo root) is the full redesign brief.
+  This session covered its hard mobile constraints and pain points 1, 3, 4, 6,
+  11, 12, 18 — the rest (global search, empty-state visuals, period-selector
+  consistency, seasonality heatmap) is still open.
+
+## Testing
+
+- `npm test` — 134 unit tests. `npm run test:e2e` — Playwright, desktop +
+  iPhone, against a production build.
+- CI runs typecheck + unit + build + **e2e** on every PR (`ci.yml`).
+- Signed-in admin e2e specs skip unless `E2E_ADMIN_USER` /
+  `E2E_ADMIN_PASSWORD` are set. They are **not** set as repo secrets — add
+  them to turn that coverage on in CI. Locally:
+  `E2E_ADMIN_USER=jj E2E_ADMIN_PASSWORD=$(npx convex env get ADMIN_JJ_PASSWORD) npm run test:e2e`
+- `npm run build` runs `tsc -b` first: a type error means **no new bundle**,
+  and `vite preview` will happily keep serving the stale one. Never debug a
+  built artifact without checking the build actually succeeded.
 
 ## Open threads
 
