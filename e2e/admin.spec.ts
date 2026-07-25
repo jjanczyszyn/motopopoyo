@@ -100,6 +100,24 @@ test.describe("signed in", () => {
     }
   });
 
+  test("dashboard leads with all-time revenue and the partner balance", async ({ page }) => {
+    await page.goto("/admin#dashboard");
+
+    await expect(page.getByText(/all-time revenue/i)).toBeVisible();
+    await expect(page.getByText(/JJ earned/i)).toBeVisible();
+    await expect(page.getByText(/Karen earned/i)).toBeVisible();
+    await expect(page.getByText(/balance between partners/i)).toBeVisible();
+
+    // Either they're square or one owes the other a concrete amount.
+    await expect(
+      page.getByText(/all settled up|owes .* \$\d/i).first()
+    ).toBeVisible();
+
+    // And it's a shortcut into the settlement section.
+    await page.getByRole("button", { name: /go to partner settlement/i }).click();
+    await expect(page.getByText(/transfers/i).first()).toBeVisible();
+  });
+
   test("season switch is reachable in settings", async ({ page }) => {
     await page.goto("/admin#settings");
     await expect(page.getByText(/season pricing/i).first()).toBeVisible();

@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### Added
+- **All-time totals lead the dashboard.** A card above the period stats shows
+  total revenue since the first rental, what JJ and Karen have each earned
+  (with their effective share %) versus what each has physically collected,
+  and the balance outstanding between them — tap it to jump straight to
+  Partner settlement. The per-month settlement card is now labelled with its
+  month so the two can't be confused.
 - **One-tap payment recording.** Bookings and Payments now show a green
   "Mark paid · $X" button that records the whole outstanding balance as
   received on the rental's **start date**, using the booking's own payment
