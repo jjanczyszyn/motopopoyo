@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Removed
+- **Daily owner report email stopped.** The 03:00 UTC cron that emailed
+  helo@popoyo.co is unscheduled; the report code stays so it can be
+  re-enabled with one line in `convex/crons.ts`.
+
 ### Added
 - **All-time totals lead the dashboard.** A card above the period stats shows
   total revenue since the first rental, what JJ and Karen have each earned
