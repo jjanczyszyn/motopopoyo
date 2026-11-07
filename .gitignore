@@ -4,7 +4,6 @@ dist
 .env.local
 .env*.local
 .passwords
-convex/_generated
 .vite
 *.tsbuildinfo
 coverage

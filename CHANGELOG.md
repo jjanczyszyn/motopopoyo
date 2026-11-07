@@ -28,6 +28,11 @@
   target sizing, and no-horizontal-overflow checks. Signed-in admin specs run
   when `E2E_ADMIN_USER` / `E2E_ADMIN_PASSWORD` are set.
 
+### Changed
+- **CI no longer needs a Convex secret.** The generated Convex types
+  (`convex/_generated`) are now committed, as Convex recommends, so typecheck
+  and tests run on a clean checkout without a deploy key.
+
 ### Fixed
 - The admin ignored hash changes, so browser Back/Forward and deep links like
   `/admin#settings` left the URL and the visible section out of sync — with no
