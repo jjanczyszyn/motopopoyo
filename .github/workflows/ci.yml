@@ -18,12 +18,6 @@ jobs:
 
       - run: npm ci
 
-      # convex/_generated is gitignored — regenerate before typechecking.
-      - name: Generate Convex types
-        run: npx convex codegen --typecheck=disable
-        env:
-          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
-
       - name: Typecheck
         run: npm run typecheck
 
@@ -50,11 +44,6 @@ jobs:
           cache: npm
 
       - run: npm ci
-
-      - name: Generate Convex types
-        run: npx convex codegen --typecheck=disable
-        env:
-          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium webkit
