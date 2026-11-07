@@ -1,9 +1,62 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { computeTotal, daysBetweenISO } from "./lib/pricing";
 import { outstanding, payStatusFor, receivedTotal } from "./lib/balance";
 import { assertAdmin, assertAdminRead } from "./admin";
 import { DEFAULT_JJ_PCT, DEFAULT_KAREN_PCT } from "./lib/settlement";
+import {
+  blockedDays,
+  findOverlap,
+  nameNeedsReview,
+  repriceTotal,
+} from "./lib/integrity";
+
+// Error codes the renter UI maps to a translated message.
+export const BIKE_UNAVAILABLE = "BIKE_UNAVAILABLE";
+
+/**
+ * Throws when `bikeId` is already held by another booking, or blocked for
+ * maintenance, on any day of [startDate, endDate).
+ */
+async function assertBikeFree(
+  ctx: MutationCtx,
+  want: {
+    bikeId: Id<"bikes">;
+    startDate: string;
+    endDate: string;
+    excludeId?: Id<"reservations">;
+  }
+): Promise<void> {
+  const bookings = await ctx.db
+    .query("reservations")
+    .withIndex("by_bike_dates", (q) =>
+      q.eq("bikeId", want.bikeId).lt("startDate", want.endDate)
+    )
+    .collect();
+  const clash = findOverlap(bookings, want);
+  if (clash) {
+    throw new ConvexError(
+      `${BIKE_UNAVAILABLE}: this bike is already booked ${clash.startDate} → ${clash.endDate} (${clash.code}).`
+    );
+  }
+  const blocks = await ctx.db
+    .query("motorcycleAvailability")
+    .withIndex("by_bike_date", (q) =>
+      q
+        .eq("bikeId", want.bikeId)
+        .gte("date", want.startDate)
+        .lt("date", want.endDate)
+    )
+    .collect();
+  const days = blockedDays(blocks, want.bikeId, want.startDate, want.endDate);
+  if (days.length > 0) {
+    throw new ConvexError(
+      `${BIKE_UNAVAILABLE}: this bike is out of service on ${days.join(", ")}.`
+    );
+  }
+}
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 function genCode(): string {
@@ -54,6 +107,11 @@ export const create = mutation({
     };
     const days = daysBetweenISO(input.startDate, input.endDate);
     if (days < 1) throw new Error("endDate must be after startDate");
+    await assertBikeFree(ctx, {
+      bikeId: input.bikeId,
+      startDate: input.startDate,
+      endDate: input.endDate,
+    });
     const totalUSD = computeTotal(days, rates);
 
     // Try a few times in case of code collision.
@@ -91,6 +149,7 @@ export const create = mutation({
       docCountry: input.docCountry,
       docImageId: input.docImageId,
       docOcrRawJson: input.docOcrRawJson,
+      needsReview: nameNeedsReview(input.docFirstName, input.docLastName) || undefined,
 
       phoneCC: input.phoneCC,
       phoneNum: input.phoneNum,
@@ -171,7 +230,10 @@ export const listForAdmin = query({
           (p) => p.reservationId === r._id
         );
         const paid = receivedTotal(reservationPayments);
-        const balance = Math.max(0, outstanding(r.totalUSD, reservationPayments));
+        const signed = outstanding(r.totalUSD, reservationPayments);
+        const balance = Math.max(0, signed);
+        // Money received beyond the booking total: a refund owed or a typo.
+        const credit = Math.max(0, -signed);
         const payStatus = payStatusFor(r.totalUSD, reservationPayments);
         return {
           ...r,
@@ -185,6 +247,7 @@ export const listForAdmin = query({
             : null,
           paid,
           balance,
+          credit,
           payStatus,
           paymentCount: reservationPayments.length,
         };
@@ -207,6 +270,11 @@ export const adminCreate = mutation({
     source: v.optional(v.string()),
     discount: v.optional(v.number()),
     notes: v.optional(v.string()),
+    // Book even if the bike looks taken (e.g. back-filling a past rental).
+    force: v.optional(v.boolean()),
+    // The price agreed with the renter, when it isn't the list price
+    // (low-season deals, a returning customer). Replaces the computed total.
+    agreedTotalUSD: v.optional(v.number()),
     status: v.optional(
       v.union(
         v.literal("pending"),
@@ -227,8 +295,20 @@ export const adminCreate = mutation({
     };
     const days = daysBetweenISO(args.startDate, args.endDate);
     if (days < 1) throw new Error("endDate must be after startDate");
+    const status = args.status ?? "confirmed";
+    if (!args.force && status !== "returned" && status !== "cancelled") {
+      await assertBikeFree(ctx, {
+        bikeId: args.bikeId,
+        startDate: args.startDate,
+        endDate: args.endDate,
+      });
+    }
     const totalBeforeDiscount = computeTotal(days, rates);
-    const totalUSD = Math.max(0, totalBeforeDiscount - (args.discount ?? 0));
+    if (args.agreedTotalUSD !== undefined && args.agreedTotalUSD < 0) {
+      throw new Error("The agreed price can't be negative.");
+    }
+    const totalUSD =
+      args.agreedTotalUSD ?? Math.max(0, totalBeforeDiscount - (args.discount ?? 0));
 
     let code = genCode();
     for (let i = 0; i < 3; i++) {
@@ -250,7 +330,7 @@ export const adminCreate = mutation({
     const now = Date.now();
     const id = await ctx.db.insert("reservations", {
       code,
-      status: args.status ?? "confirmed",
+      status,
       bikeId: args.bikeId,
       startDate: args.startDate,
       endDate: args.endDate,
@@ -278,7 +358,8 @@ export const adminCreate = mutation({
 
       customerEmail: args.customerEmail,
       source: args.source ?? "walk_in",
-      discount: args.discount,
+      discount: args.agreedTotalUSD !== undefined ? undefined : args.discount,
+      agreedPrice: args.agreedTotalUSD !== undefined ? true : undefined,
       notes: args.notes,
 
       createdAt: now,
@@ -304,8 +385,10 @@ export const adminUpdate = mutation({
     bikeId: v.optional(v.id("bikes")),
     jjSharePct: v.optional(v.number()),
     karenSharePct: v.optional(v.number()),
+    force: v.optional(v.boolean()),
+    agreedTotalUSD: v.optional(v.number()),
   },
-  handler: async (ctx, { adminToken, id, ...patch }) => {
+  handler: async (ctx, { adminToken, id, force, agreedTotalUSD, ...patch }) => {
     await assertAdmin(ctx, adminToken);
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Reservation not found.");
@@ -332,34 +415,48 @@ export const adminUpdate = mutation({
     if (patch.jjSharePct !== undefined) next.jjSharePct = patch.jjSharePct;
     if (patch.karenSharePct !== undefined) next.karenSharePct = patch.karenSharePct;
 
-    if (patch.startDate || patch.endDate) {
+    // Re-price from the booking's own daily rate, never today's season.
+    const dailyRate =
+      existing.dailyRateUSD ?? (await ctx.db.query("config").first())?.dailyRate ?? 20;
+    const discount =
+      patch.discount !== undefined ? patch.discount : existing.discount ?? 0;
+
+    const datesOrBikeChanged =
+      patch.startDate !== undefined ||
+      patch.endDate !== undefined ||
+      patch.bikeId !== undefined;
+    if (datesOrBikeChanged) {
       const newStart = patch.startDate ?? existing.startDate;
       const newEnd = patch.endDate ?? existing.endDate;
       const days = daysBetweenISO(newStart, newEnd);
       if (days < 1) throw new Error("endDate must be after startDate");
+      if (!force && existing.status !== "returned" && existing.status !== "cancelled") {
+        await assertBikeFree(ctx, {
+          bikeId: patch.bikeId ?? existing.bikeId,
+          startDate: newStart,
+          endDate: newEnd,
+          excludeId: id,
+        });
+      }
       next.startDate = newStart;
       next.endDate = newEnd;
       next.days = days;
-
-      const cfg = await ctx.db.query("config").first();
-      const rates = {
-        daily: cfg?.dailyRate ?? 20,
-        weekly: cfg?.weeklyRate ?? 120,
-        monthly: cfg?.monthlyRate ?? 450,
-      };
-      const before = computeTotal(days, rates);
-      const discount =
-        patch.discount !== undefined ? patch.discount : existing.discount ?? 0;
-      next.totalUSD = Math.max(0, before - discount);
-    } else if (patch.discount !== undefined) {
-      const cfg = await ctx.db.query("config").first();
-      const rates = {
-        daily: cfg?.dailyRate ?? 20,
-        weekly: cfg?.weeklyRate ?? 120,
-        monthly: cfg?.monthlyRate ?? 450,
-      };
-      const before = computeTotal(existing.days, rates);
-      next.totalUSD = Math.max(0, before - patch.discount);
+      if (!existing.agreedPrice && (days !== existing.days || patch.discount !== undefined)) {
+        next.totalUSD = repriceTotal(days, dailyRate, discount);
+      }
+    } else if (patch.discount !== undefined && !existing.agreedPrice) {
+      next.totalUSD = repriceTotal(existing.days, dailyRate, discount);
+    }
+    if (agreedTotalUSD !== undefined) {
+      if (agreedTotalUSD < 0) throw new Error("The agreed price can't be negative.");
+      next.totalUSD = agreedTotalUSD;
+      next.agreedPrice = true;
+    }
+    if (patch.customerName !== undefined) {
+      next.needsReview = nameNeedsReview(
+        next.docFirstName as string,
+        next.docLastName as string
+      ) || undefined;
     }
 
     await ctx.db.patch(id, next);
@@ -368,11 +465,13 @@ export const adminUpdate = mutation({
 
 export const attachDoc = mutation({
   args: {
+    adminToken: v.string(),
     id: v.id("reservations"),
     storageId: v.optional(v.id("_storage")),
     ocrJson: v.optional(v.string()),
   },
-  handler: async (ctx, { id, storageId, ocrJson }) => {
+  handler: async (ctx, { adminToken, id, storageId, ocrJson }) => {
+    await assertAdmin(ctx, adminToken);
     await ctx.db.patch(id, {
       docImageId: storageId,
       docOcrRawJson: ocrJson,
@@ -383,12 +482,14 @@ export const attachDoc = mutation({
 
 export const attachSignature = mutation({
   args: {
+    adminToken: v.string(),
     id: v.id("reservations"),
     mode: v.union(v.literal("draw"), v.literal("type")),
     storageId: v.optional(v.id("_storage")),
     typed: v.optional(v.string()),
   },
-  handler: async (ctx, { id, mode, storageId, typed }) => {
+  handler: async (ctx, { adminToken, id, mode, storageId, typed }) => {
+    await assertAdmin(ctx, adminToken);
     await ctx.db.patch(id, {
       signatureMode: mode,
       signaturePng: storageId,
@@ -401,12 +502,14 @@ export const attachSignature = mutation({
 
 export const setDelivery = mutation({
   args: {
+    adminToken: v.string(),
     id: v.id("reservations"),
     addr: v.string(),
     hour: v.number(),
     date: v.optional(v.string()),
   },
-  handler: async (ctx, { id, addr, hour, date }) => {
+  handler: async (ctx, { adminToken, id, addr, hour, date }) => {
+    await assertAdmin(ctx, adminToken);
     await ctx.db.patch(id, {
       deliveryAddr: addr,
       deliveryHour: hour,
@@ -417,8 +520,9 @@ export const setDelivery = mutation({
 });
 
 export const cancel = mutation({
-  args: { id: v.id("reservations") },
-  handler: async (ctx, { id }) => {
+  args: { adminToken: v.string(), id: v.id("reservations") },
+  handler: async (ctx, { adminToken, id }) => {
+    await assertAdmin(ctx, adminToken);
     await ctx.db.patch(id, { status: "cancelled", updatedAt: Date.now() });
   },
 });

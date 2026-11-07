@@ -1,3 +1,4 @@
+import { errorText } from "../lib/convexError";
 import React from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -52,6 +53,8 @@ type Booking = {
   paid: number;
   status: string;
   payStatus: string;
+  credit?: number;
+  needsReview?: boolean;
   payMethod: string;
   source?: string;
   bike: { name: string; color: string; plate: string } | null;
@@ -73,6 +76,37 @@ interface BookingColumn {
   render: (r: Booking) => React.ReactNode;
 }
 
+// Shown next to names the ID scan probably got wrong (e.g. "Republica De
+// Nicaragua" read off a card heading). Editing the name clears it.
+function ReviewBadge() {
+  return (
+    <span title="The scanned name looks wrong. Check the ID photo and edit the name."
+      style={{
+        marginLeft: 6, padding: "1px 6px", borderRadius: 999, fontSize: 10,
+        fontWeight: 700, background: "#fef3c7", color: "#92400e", verticalAlign: "middle",
+      }}>
+      Check name
+    </span>
+  );
+}
+
+// Runs a create/update; if the server says the bike is taken, asks whether
+// to save anyway (useful when back-filling past rentals) and retries.
+async function withForceRetry<T>(run: (force?: boolean) => Promise<T>): Promise<T> {
+  try {
+    return await run(undefined);
+  } catch (e) {
+    const msg = errorText(e);
+    const i = msg.indexOf("BIKE_UNAVAILABLE");
+    if (i < 0) throw e;
+    const detail = msg.slice(i + "BIKE_UNAVAILABLE: ".length).split("\n")[0];
+    if (!window.confirm(`Heads up: ${detail}\n\nSave anyway?`)) {
+      throw new Error("Not saved: the bike is taken for those dates.");
+    }
+    return await run(true);
+  }
+}
+
 const ALL_COLUMNS: BookingColumn[] = [
   { id: "code", label: "Code", defaultVisible: false, sortable: true,
     accessor: (r) => r.code,
@@ -81,7 +115,10 @@ const ALL_COLUMNS: BookingColumn[] = [
     accessor: (r) => `${r.docFirstName} ${r.docLastName}`.toLowerCase(),
     render: (r) => (
       <>
-        <div style={{ fontWeight: 600 }}>{r.docFirstName} {r.docLastName}</div>
+        <div style={{ fontWeight: 600 }}>
+          {r.docFirstName} {r.docLastName}
+          {r.needsReview && <ReviewBadge />}
+        </div>
         {(r.phoneCC || r.phoneNum) && (
           <div style={{ fontSize: 11, color: "var(--muted)" }}>{r.phoneCC} {r.phoneNum}</div>
         )}
@@ -104,14 +141,23 @@ const ALL_COLUMNS: BookingColumn[] = [
     render: (r) => <span style={{ fontWeight: 600 }}>{fmtUSD(r.totalUSD)}</span> },
   { id: "paid", label: "Paid", defaultVisible: true, align: "right", sortable: true,
     accessor: (r) => r.paid,
-    render: (r) => fmtUSD(r.paid) },
+    render: (r) => (
+      <>
+        {fmtUSD(r.paid)}
+        {(r.credit ?? 0) > 0 && (
+          <div style={{ fontSize: 11, color: "#3730a3", fontWeight: 600 }}>
+            +{fmtUSD(r.credit ?? 0)} credit
+          </div>
+        )}
+      </>
+    ) },
   { id: "status", label: "Status", defaultVisible: true, sortable: true,
     accessor: (r) => r.status,
     render: (r) => <StatusPill status={r.status} /> },
   { id: "payMethod", label: "Payment", defaultVisible: true, sortable: true,
     accessor: (r) => r.payMethod,
     render: (r) => payMethodLabel(r.payMethod) },
-  { id: "payStatus", label: "Pay status", defaultVisible: false, sortable: true,
+  { id: "payStatus", label: "Pay status", defaultVisible: true, sortable: true,
     accessor: (r) => r.payStatus,
     render: (r) => <StatusPill status={r.payStatus} /> },
   { id: "source", label: "Source", defaultVisible: false, sortable: true,
@@ -240,7 +286,15 @@ export function Bookings({ adminToken }: Props) {
           <div key={r._id} style={mobileCard}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
               <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 15 }}>{r.docFirstName} {r.docLastName}</div>
+                <div style={{ fontWeight: 700, fontSize: 15 }}>
+                  {r.docFirstName} {r.docLastName}
+                  {r.needsReview && <ReviewBadge />}
+                </div>
+                {(r.credit ?? 0) > 0 && (
+                  <div style={{ fontSize: 12, color: "#3730a3", fontWeight: 600 }}>
+                    Overpaid by {fmtUSD(r.credit ?? 0)}: refund or fix the payment
+                  </div>
+                )}
                 <div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "JetBrains Mono, monospace" }}>{r.code}</div>
               </div>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
@@ -630,6 +684,7 @@ function NewBookingForm({
   const [customerEmail, setCustomerEmail] = React.useState("");
   const [source, setSource] = React.useState<string>("walk_in");
   const [discount, setDiscount] = React.useState<string>("");
+  const [agreed, setAgreed] = React.useState<string>("");
   const [notes, setNotes] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState("");
@@ -639,8 +694,9 @@ function NewBookingForm({
     try {
       if (!bikeId) throw new Error("Pick a bike.");
       if (!customerName.trim()) throw new Error("Customer name required.");
-      await create({
+      await withForceRetry((force) => create({
         adminToken,
+        force,
         bikeId: bikeId as Id<"bikes">,
         startDate, endDate,
         customerName: customerName.trim(),
@@ -648,8 +704,9 @@ function NewBookingForm({
         customerEmail: customerEmail || undefined,
         source,
         discount: discount ? parseFloat(discount) : undefined,
+        agreedTotalUSD: agreed ? parseFloat(agreed) : undefined,
         notes: notes || undefined,
-      });
+      }));
       onClose();
     } catch (e) {
       setErr((e as Error).message);
@@ -683,7 +740,8 @@ function NewBookingForm({
             {SOURCE_OPTIONS.map((s) => (<option key={s} value={s}>{s.replace("_", " ")}</option>))}
           </select>
         </Field>
-        <Field label="Discount (USD)"><input type="number" value={discount} onChange={(e) => setDiscount(e.target.value)} style={inputStyle} /></Field>
+        <Field label="Discount (USD)"><input type="number" inputMode="decimal" value={discount} onChange={(e) => setDiscount(e.target.value)} style={inputStyle} /></Field>
+        <Field label="Agreed price (USD, optional)"><input type="number" inputMode="decimal" placeholder="Leave empty for the list price" value={agreed} onChange={(e) => setAgreed(e.target.value)} style={inputStyle} /></Field>
         <Field label="Notes"><input value={notes} onChange={(e) => setNotes(e.target.value)} style={inputStyle} /></Field>
       </div>
       {err && <div style={{ color: "#b91c1c", fontSize: 12, marginTop: 8 }}>{err}</div>}
@@ -705,6 +763,7 @@ function EditBookingForm({
   const [customerEmail, setCustomerEmail] = React.useState("");
   const [customerPhone, setCustomerPhone] = React.useState("");
   const [source, setSource] = React.useState("");
+  const [agreed, setAgreed] = React.useState("");
   const [discount, setDiscount] = React.useState("");
   const [notes, setNotes] = React.useState("");
   const [startDate, setStartDate] = React.useState("");
@@ -721,6 +780,7 @@ function EditBookingForm({
     setCustomerPhone(`${r.phoneCC}${r.phoneNum}`);
     setSource(r.source ?? "");
     setDiscount(r.discount ? String(r.discount) : "");
+    setAgreed(r.agreedPrice ? String(r.totalUSD) : "");
     setNotes(r.notes ?? "");
     setStartDate(r.startDate);
     setEndDate(r.endDate);
@@ -730,14 +790,15 @@ function EditBookingForm({
   const submit = async () => {
     setBusy(true); setErr("");
     try {
-      await update({
-        adminToken, id: reservationId,
+      await withForceRetry((force) => update({
+        adminToken, id: reservationId, force,
         customerName, customerEmail: customerEmail || undefined,
         customerPhone, source: source || undefined,
         discount: discount ? parseFloat(discount) : undefined,
+        agreedTotalUSD: agreed ? parseFloat(agreed) : undefined,
         notes: notes || undefined,
         startDate, endDate,
-      });
+      }));
       onClose();
     } catch (e) {
       setErr((e as Error).message);
@@ -770,6 +831,7 @@ function EditBookingForm({
             </select>
           </Field>
           <Field label="Discount (USD)"><input type="number" inputMode="decimal" value={discount} onChange={(e) => setDiscount(e.target.value)} style={inputStyle} /></Field>
+          <Field label="Agreed price (USD, optional)"><input type="number" inputMode="decimal" placeholder="Leave empty for the list price" value={agreed} onChange={(e) => setAgreed(e.target.value)} style={inputStyle} /></Field>
           <Field label="Notes"><input value={notes} onChange={(e) => setNotes(e.target.value)} style={inputStyle} /></Field>
         </div>
         {err && <div style={{ color: "#b91c1c", fontSize: 12, marginTop: 8 }}>{err}</div>}

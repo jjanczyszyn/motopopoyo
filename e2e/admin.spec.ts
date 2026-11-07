@@ -118,6 +118,24 @@ test.describe("signed in", () => {
     await expect(page.getByText(/transfers/i).first()).toBeVisible();
   });
 
+  test("payments separate overdue from upcoming, and ask before recording", async ({ page }) => {
+    await page.goto("/admin#payments");
+    await expect(page.getByText(/overdue payments \(\d+\)/i)).toBeVisible();
+    const markPaid = page.getByRole("button", { name: /mark paid/i }).first();
+    if (await markPaid.count()) {
+      // Dismiss the confirmation: nothing must be written.
+      page.once("dialog", (d) => d.dismiss());
+      await markPaid.click();
+      await expect(markPaid).toBeEnabled();
+    }
+  });
+
+  test("bookings show pay status by default", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name === "mobile", "the table is desktop-only");
+    await page.goto("/admin#bookings");
+    await expect(page.getByRole("columnheader", { name: /pay status/i })).toBeVisible();
+  });
+
   test("season switch is reachable in settings", async ({ page }) => {
     await page.goto("/admin#settings");
     await expect(page.getByText(/season pricing/i).first()).toBeVisible();

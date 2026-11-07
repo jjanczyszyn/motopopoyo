@@ -140,6 +140,8 @@ const en: Dict = {
   "delivery.confirmCta": "Confirm reservation",
 
   // Done
+  "error.bikeTaken": "Sorry, that bike was just booked for some of those days. Please pick other dates or another bike.",
+  "error.generic": "Sorry, something went wrong. Please try again, or message Karen on WhatsApp.",
   "done.heading": "You're all set.",
   "done.atDelivery": "At delivery",
   "done.howToPay": "How to pay",
@@ -273,6 +275,8 @@ const es: Dict = {
   "delivery.submitting": "Enviando…",
   "delivery.confirmCta": "Confirmar reserva",
 
+  "error.bikeTaken": "Lo sentimos, esa moto se acaba de reservar para algunos de esos días. Elige otras fechas u otra moto.",
+  "error.generic": "Lo sentimos, algo salió mal. Inténtalo de nuevo o escríbele a Karen por WhatsApp.",
   "done.heading": "¡Listo!",
   "done.atDelivery": "En la entrega",
   "done.howToPay": "Cómo pagar",
