@@ -64,7 +64,10 @@ All are status *returned*, source *whatsapp*, paid in cash to Karen.
 
 ### Still open
 
-- Names for KJ-B72R-767, KJ-RZRR-664 and KJ-VQLW-866.
+- Name for KJ-B72R-767 (Sep 16–18, Genesis blue). Karen confirmed the
+  names for KJ-RZRR-664 and KJ-VQLW-866 later on 2026-11-07; both were set in
+  the app the same day. KJ-D5NM-956 is booked under a friend's name; Karen
+  has the actual renter's passport (noted on the booking).
 - Karen's voice note of 2026-11-07 03:29 UTC was not transcribed; it may
   mention more rentals.
 - Possible extra Yamaha day around Jul 3 ("Un día más dejó la Yamaha"); not

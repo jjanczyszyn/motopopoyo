@@ -1,4 +1,4 @@
-# Session handoff — 2026-07-28 12:48 UTC
+# Session handoff — 2026-11-07 03:55 UTC
 
 ## What this is
 
@@ -6,7 +6,8 @@
 Vite + React on GitHub Pages, Convex backend, in-browser OCR for ID capture.
 [README.md](./README.md) has the stack, schema, pricing model and test
 commands; [CLAUDE.md](./CLAUDE.md) has the hard rules (no PII or secrets in
-git, dev-vs-prod Convex split).
+git, dev-vs-prod Convex split). Hand-made prod data changes are logged in
+[docs/data-log.md](./docs/data-log.md).
 
 ## Deploy / ops essentials
 
@@ -55,12 +56,26 @@ git, dev-vs-prod Convex split).
   earnings and share %, what each collected, and the balance between them,
   tapping through to Partner settlement.
 
-## Business snapshot (2026-07-25, prod)
+## Shipped 2026-11-07 (PRs #7–#10)
 
-- All-time revenue **$5,174**. JJ earned $3,622 / collected $990; Karen earned
-  $1,552 / collected $4,184 → **Karen owes JJ $2,631.80**, unsettled.
-- Average occupancy **~26%** across the 16 months with rentals (Apr 2025 –
-  Jul 2026); range 8.6% (Jan 2026) to 50% (Apr 2026). Three bikes.
+- Daily owner report email is **off** (#7). CI no longer needs a Convex
+  secret: `convex/_generated` is committed (#8); regenerate it
+  (`npx convex codegen`) in any PR that changes Convex functions.
+- **Booking integrity** (#9): server-side double-booking and maintenance
+  check (admins can "save anyway"), re-pricing from the booking's own rate,
+  **agreed prices**, admin-only cancel/edit, overpayment credit, "Check name"
+  flag, Overdue vs Upcoming payments with a confirm.
+- **Usage & error log** (#10): admin → More → Activity & errors (funnel,
+  errors, every event). Read it first when something "doesn't work".
+- **Prod back-fill** of Jun–Nov rentals from Karen's WhatsApp: revenue
+  $6,237 → $6,917. Details and evidence in `docs/data-log.md`.
+
+## Business snapshot (2026-11-07, prod)
+
+- All-time received revenue **$6,917** across 70 bookings. Karen had never
+  logged in to the admin: rentals reached the app only via the renter form,
+  and payments were never recorded after Jul 11. Fix the habit, not just the
+  data.
 
 ## Open threads
 
@@ -71,7 +86,8 @@ git, dev-vs-prod Convex split).
 2. **Google review sync is built but dormant.** `reviews.refresh` (daily cron)
    calls the Places API (New) and upserts by review id using Google's exact
    `publishTime`. No-ops until `GOOGLE_PLACES_API_KEY` and `GOOGLE_PLACE_ID`
-   are set in the Convex prod env. Until then new reviews go by hand into
+   are set in the Convex prod env (none found in the owner's settings on
+   2026-11-07). Until then new reviews go by hand into
    `seedReviews` in `convex/seed.ts` (owner pastes them, add a real `date`),
    then re-seed prod.
 3. Franziska Koch's review is dated `2026-05-25`, inferred from Google's
@@ -83,3 +99,14 @@ git, dev-vs-prod Convex split).
    period-selector consistency, the seasonality heatmap on phones.
 5. Untracked local files kept out of git on purpose: `ADMIN_DESIGN_SPEC.md`,
    `convex/_debugReport.ts`.
+5. **Karen and the admin.** Give her the `karen` login (already configured)
+   or a weekly "mark these paid" list. Still open from the back-fill: the
+   renter name for KJ-B72R-767, and a voice note from 2026-11-07 that wasn't
+   transcribed.
+6. **Next review items** (from the 2026-11-06 UX/operator review): renter
+   checkout fixes (price summary on the payment step, one deposit rule,
+   cookie banner covering CTAs, draft lost on reload, booking page by code,
+   prefilled payment links, iOS 16px inputs, "electric" on Genesis cards),
+   bank-transfer options that promise an email nobody sends, a "Today"
+   screen, automatic status changes, deposits tracked apart from revenue,
+   expenses/profit, editable payment handles in Settings.
