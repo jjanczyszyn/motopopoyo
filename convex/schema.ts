@@ -196,6 +196,25 @@ export default defineSchema({
     .index("by_bike_date", ["bikeId", "date"])
     .index("by_date", ["date"]),
 
+  // Usage and error log (see convex/events.ts). No customer PII: names,
+  // phones and ID data are never logged; free text is scrubbed. Pruned
+  // after 90 days by a daily cron.
+  events: defineTable({
+    at: v.number(),
+    sessionId: v.string(), // random per browser tab
+    area: v.union(v.literal("site"), v.literal("admin")),
+    kind: v.union(v.literal("visit"), v.literal("step"), v.literal("action"), v.literal("error")),
+    name: v.string(), // e.g. "screen:calendar", "booking_created", "server_error"
+    detail: v.optional(v.string()),
+    path: v.optional(v.string()),
+    locale: v.optional(v.string()),
+    device: v.optional(v.union(v.literal("mobile"), v.literal("desktop"))),
+    user: v.optional(v.string()), // admin username only
+    bookingCode: v.optional(v.string()),
+  })
+    .index("by_at", ["at"])
+    .index("by_kind_at", ["kind", "at"]),
+
   adminSessions: defineTable({
     token: v.string(),
     expiresAt: v.number(),

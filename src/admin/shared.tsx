@@ -1,3 +1,4 @@
+import { track } from "../lib/telemetry";
 import React from "react";
 
 export const fmtUSD = (n: number | null | undefined): string => {
@@ -311,6 +312,7 @@ export class SectionErrorBoundary extends React.Component<
   }
   componentDidCatch(error: Error) {
     console.error("[admin]", error);
+    track("error", "screen_crash", { detail: `${this.props.sectionName}: ${error.message ?? error}` });
   }
   reset = () => this.setState({ error: null });
   render() {

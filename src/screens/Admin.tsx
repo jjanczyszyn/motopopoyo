@@ -1,3 +1,4 @@
+import { setAdminUser, track } from "../lib/telemetry";
 import React from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -10,6 +11,7 @@ import { Seasonality } from "../admin/Seasonality";
 import { Settlement } from "../admin/Settlement";
 import { Reports } from "../admin/Reports";
 import { Settings } from "../admin/Settings";
+import { Activity } from "../admin/Activity";
 import { SectionErrorBoundary, useIsMobile } from "../admin/shared";
 
 // Server-side auth: each owner has their own password env var
@@ -43,8 +45,12 @@ function useAdminAuth() {
       const result = await verifyPassword({ username, password: pw });
       sessionStorage.setItem(TOKEN_KEY, result.token);
       setToken(result.token);
+      setAdminUser(username);
+      track("action", "admin_login", { detail: username });
       return true;
     } catch {
+      // Username only; never the password.
+      track("action", "admin_login_failed", { detail: username });
       return false;
     }
   };
@@ -231,7 +237,7 @@ function LoginGate({
 
 const TABS = [
   "dashboard", "bookings", "motorcycles", "revenue", "payments",
-  "seasonality", "settlement", "reports", "settings",
+  "seasonality", "settlement", "reports", "activity", "settings",
 ] as const;
 type Tab = typeof TABS[number];
 
@@ -244,6 +250,7 @@ const TAB_LABELS: Record<Tab, string> = {
   seasonality: "Seasonality",
   settlement: "Partner settlement",
   reports: "Reports",
+  activity: "Activity & errors",
   settings: "Settings",
 };
 
@@ -267,6 +274,7 @@ const TAB_ICONS: Record<Tab, string> = {
   motorcycles: "◍",
   revenue: "◔",
   seasonality: "▦",
+  activity: "⚑",
   settlement: "⇄",
   reports: "⇩",
   settings: "⚙",
@@ -367,6 +375,7 @@ export function AdminScreen() {
 
   React.useEffect(() => {
     if (tab) window.location.hash = tab;
+    track("step", `tab:${tab}`);
   }, [tab]);
 
   // Follow the hash when it changes underneath us — browser Back/Forward, a
@@ -412,6 +421,7 @@ export function AdminScreen() {
     case "seasonality": inner = <Seasonality adminToken={token} year={year} setYear={setYear} />; break;
     case "settlement":  inner = <Settlement {...sectionProps} />; break;
     case "reports":     inner = <Reports adminToken={token} year={year} setYear={setYear} />; break;
+    case "activity":    inner = <Activity adminToken={token} />; break;
     case "settings":    inner = <Settings adminToken={token} />; break;
   }
   // `key={tab}` resets the boundary each time the user switches tabs so a
@@ -423,6 +433,9 @@ export function AdminScreen() {
   );
 
   const username = (session && session.ok && session.username) ? session.username : null;
+  // Plain assignment, not a hook: this line runs after an early return for
+  // the login screen, and a hook here would change the hook count.
+  setAdminUser(username ?? undefined);
 
   return (
     // index.html locks <body> to overflow:hidden + 100dvh for the fullscreen

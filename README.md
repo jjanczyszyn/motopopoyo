@@ -107,6 +107,36 @@ on a phone while a customer waits, and installable as a PWA.
   [`docs/data-log.md`](docs/data-log.md) and tagged in the record's notes.
 - Desktop keeps the wide tables, the column picker and the top tab row.
 
+## Usage & error log
+
+Admin → **More → Activity & errors** shows what people do and what breaks:
+site visitors and completed bookings over 30 days, the **booking funnel** (how
+many visitors reached each step, so drop-offs stand out), and a filterable
+list of events (everything / errors / renter site / admin), in Nicaragua time.
+
+| Logged | Event |
+|---|---|
+| Site or admin opened (with referrer host) | `visit` `site_open` / `admin_open` |
+| Each renter screen reached | `step` `screen:<step>` |
+| Each admin tab opened | `step` `tab:<tab>` |
+| Booking created / failed, admin login / failed login | `action` |
+| Failed server call (function + message), JS error, unhandled promise, screen crash | `error` |
+
+How it works: `src/lib/telemetry.ts` batches events to the public
+`events.log` mutation and wraps the Convex client so every failed mutation or
+action is logged with its function name. `convex/events.ts` stores them in the
+`events` table (indexes `by_at`, `by_kind_at`); a daily cron
+(`events.prune`, 09:00 UTC) deletes events older than 90 days.
+
+Privacy: no names, phone numbers, ID data or passwords are logged, only a
+random per-tab session id, device type, locale, path and our own messages.
+Free text is scrubbed server-side (emails, long digit runs, tokens). Admin
+events carry the admin username. Automated browsers (`navigator.webdriver`,
+including our e2e tests) are not logged.
+
+Cost: well inside Convex's free tier (a visit is roughly 5–15 small rows,
+kept 90 days).
+
 ## Testing
 
 | Command | What it runs |

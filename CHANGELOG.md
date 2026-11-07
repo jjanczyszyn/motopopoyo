@@ -8,6 +8,13 @@
   re-enabled with one line in `convex/crons.ts`.
 
 ### Added
+- **Usage and error log.** Admin → Activity & errors shows site visitors,
+  completed bookings, a step-by-step booking funnel and every logged event,
+  including failed server calls, JavaScript errors and screen crashes. No
+  customer data is logged, and events are deleted after 90 days.
+- **Crash screen.** If the app ever fails to render, renters see a short
+  bilingual message with a Reload button instead of a blank page, and the
+  crash is logged.
 - **Agreed prices.** New and edited bookings take an optional "Agreed price",
   for deals made with the renter (common in low season). Such bookings are
   never re-priced automatically.
