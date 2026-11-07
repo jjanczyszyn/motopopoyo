@@ -35,6 +35,12 @@ export const availability = query({
         r.endDate > startDate
     );
     const busyByBike = new Set<string>(blocking.map((r) => r.bikeId));
+    // Maintenance/blocked days set by the admin also make a bike unavailable.
+    const blocks = await ctx.db
+      .query("motorcycleAvailability")
+      .withIndex("by_date", (q) => q.gte("date", startDate).lt("date", endDate))
+      .collect();
+    for (const b of blocks) busyByBike.add(b.bikeId);
     return bikes
       .filter((b) => b.isActive)
       .map((b) => ({ bikeId: b._id, available: !busyByBike.has(b._id) }));

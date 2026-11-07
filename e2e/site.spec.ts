@@ -44,3 +44,25 @@ test("page does not scroll sideways", async ({ page }) => {
   // A couple of pixels of rounding is fine; a real overflow is not.
   expect(overflow).toBeLessThanOrEqual(2);
 });
+
+// The renter site talks to Convex directly, so the public API is part of the
+// surface. Changing or cancelling a booking must need an admin login.
+test("public API refuses to cancel or edit a booking without an admin login", async () => {
+  const { ConvexHttpClient } = await import("convex/browser");
+  const { anyApi } = await import("convex/server");
+  const url = process.env.VITE_CONVEX_URL ?? "https://tough-meadowlark-233.convex.cloud";
+  const client = new ConvexHttpClient(url);
+  // A well-formed but made-up id: the call must fail on the missing admin
+  // token before it ever looks the booking up. Prod hides server error text
+  // ("Server Error"), so this can only assert that the call is refused.
+  const fakeId = "j970000000000000000000000000000a";
+  for (const fn of ["cancel", "setDelivery", "attachDoc", "attachSignature"] as const) {
+    const args: Record<string, unknown> = { id: fakeId };
+    if (fn === "setDelivery") Object.assign(args, { addr: "x", hour: 10 });
+    if (fn === "attachSignature") Object.assign(args, { mode: "type", typed: "x" });
+    await expect(
+      client.mutation(anyApi.reservations[fn], args),
+      `${fn} must require adminToken`
+    ).rejects.toThrow();
+  }
+});

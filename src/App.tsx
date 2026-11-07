@@ -13,6 +13,8 @@ import { ContractScreen } from "./screens/Contract";
 import { DeliveryScreen } from "./screens/Delivery";
 import { DoneScreen } from "./screens/Done";
 import { AdminScreen } from "./screens/Admin";
+import { useI18n } from "./i18n/I18nContext";
+import { errorText } from "./lib/convexError";
 
 type Screen = "home" | "calendar" | "bike" | "ocr" | "phone" | "pay" | "contract" | "delivery" | "done";
 const SCREENS: Screen[] = ["home", "calendar", "bike", "ocr", "phone", "pay", "contract", "delivery", "done"];
@@ -49,6 +51,7 @@ function RentalFlow() {
   const [doneCode, setDoneCode] = React.useState<string | null>(null);
 
   const createReservation = useMutation(api.reservations.create);
+  const { t } = useI18n();
   const generateUploadUrl = useMutation(api.storage.generateUploadUrl);
 
   const go = (s: Screen) => setScreen(s);
@@ -125,7 +128,14 @@ function RentalFlow() {
       go("done");
     } catch (err) {
       console.error("createReservation failed", err);
-      alert("Sorry, something went wrong. Please try again.");
+      if (errorText(err).includes("BIKE_UNAVAILABLE")) {
+        // Someone else booked this bike while the renter was filling in the
+        // form: send them back to pick dates or another bike.
+        alert(t("error.bikeTaken"));
+        go("calendar");
+      } else {
+        alert(t("error.generic"));
+      }
     } finally {
       setSubmitting(false);
     }

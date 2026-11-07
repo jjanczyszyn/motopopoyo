@@ -8,6 +8,17 @@
   re-enabled with one line in `convex/crons.ts`.
 
 ### Added
+- **Agreed prices.** New and edited bookings take an optional "Agreed price",
+  for deals made with the renter (common in low season). Such bookings are
+  never re-priced automatically.
+- **Overdue vs upcoming payments.** The Payments tab separates rentals that
+  have started with nothing recorded from future ones, and "Mark paid" asks
+  for confirmation first.
+- **Data change log** (`docs/data-log.md`): every hand-made production data
+  change, with evidence and method. First entry: the 2026-11-07 back-fill of
+  Jun–Nov rentals and payments (+$680 revenue: 5 rentals added from WhatsApp,
+  6 payments recorded, 4 prices corrected, 1 deposit refund, 3 stale bookings
+  closed).
 - **All-time totals lead the dashboard.** A card above the period stats shows
   total revenue since the first rental, what JJ and Karen have each earned
   (with their effective share %) versus what each has physically collected,
@@ -39,6 +50,21 @@
   and tests run on a clean checkout without a deploy key.
 
 ### Fixed
+- **No more double-bookings.** The server now refuses a bike that is already
+  booked or blocked for maintenance on any of the requested days, for renters
+  and admins alike; renters get a translated "that bike was just booked"
+  message and go back to pick dates. The site's availability check also
+  respects maintenance days now.
+- **Booking edits keep their price.** Changing dates re-prices from the
+  booking's own daily rate instead of the current season's.
+- **Cancelling or editing a booking needs an admin login.** `cancel`,
+  `setDelivery`, `attachDoc` and `attachSignature` were open to anyone with a
+  booking ID.
+- **Overpayments are visible.** Bookings show "+$X credit" when more was
+  received than the total, and the pay-status column is on by default.
+- **Suspicious scanned names are flagged** ("Check name") instead of being
+  saved silently, e.g. an ID-card heading read as the renter's name.
+- **"Mark paid" on a future booking** is dated today, not in the future.
 - The admin ignored hash changes, so browser Back/Forward and deep links like
   `/admin#settings` left the URL and the visible section out of sync — with no
   browser chrome in PWA standalone mode there was no way back.

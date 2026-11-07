@@ -98,6 +98,11 @@ export default defineSchema({
     docCountry: v.string(),
     docImageId: v.optional(v.id("_storage")),
     docOcrRawJson: v.optional(v.string()),
+    // Set when the scanned name looks wrong (e.g. an ID-card heading).
+    needsReview: v.optional(v.boolean()),
+    // True when the total was agreed by hand (a negotiated price), so date
+    // edits never silently re-price it.
+    agreedPrice: v.optional(v.boolean()),
 
     phoneCC: v.string(),
     phoneNum: v.string(),

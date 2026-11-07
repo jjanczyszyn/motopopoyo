@@ -1,3 +1,4 @@
+import { splitAwaiting, todayInNicaragua } from "../../convex/lib/integrity";
 import React from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -33,22 +34,12 @@ function AwaitingPayment({
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [err, setErr] = React.useState("");
 
-  const outstanding = (rows ?? [])
-    .filter((r) => r.status !== "cancelled" && r.balance > 0)
-    .sort((a, b) => a.startDate.localeCompare(b.startDate));
+  const { overdue, upcoming } = splitAwaiting(rows ?? [], todayInNicaragua());
+  const [showUpcoming, setShowUpcoming] = React.useState(false);
 
-  if (rows && outstanding.length === 0) return null;
+  if (rows && overdue.length === 0 && upcoming.length === 0) return null;
 
-  return (
-    <div style={cardStyle}>
-      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
-        Awaiting payment ({outstanding.length})
-      </div>
-      <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>
-        One tap records the balance as received on the rental's start date.
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {outstanding.map((r) => (
+  const renderRow = (r: (typeof overdue)[number]) => (
           <div key={r._id} style={{
             display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
             padding: "10px 0", borderTop: "1px solid var(--line-2)",
@@ -65,6 +56,8 @@ function AwaitingPayment({
               style={{ ...btnPrimary, background: "var(--ok)" }}
               disabled={busyId === r._id}
               onClick={async () => {
+                const who = `${r.docFirstName} ${r.docLastName}`.trim();
+                if (!window.confirm(`Record ${fmtUSD(r.balance)} ${r.payMethod} from ${who}?`)) return;
                 setBusyId(r._id); setErr("");
                 try {
                   await markPaid({ adminToken, reservationId: r._id });
@@ -79,8 +72,35 @@ function AwaitingPayment({
             </button>
             <button style={btnGhost} onClick={() => onCustom(r._id)}>Custom…</button>
           </div>
-        ))}
+  );
+
+  return (
+    <div style={cardStyle}>
+      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
+        Overdue payments ({overdue.length})
       </div>
+      <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>
+        The rental has started but no payment is recorded. One tap records the
+        balance as received on the start date.
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {overdue.map(renderRow)}
+        {overdue.length === 0 && (
+          <div style={{ fontSize: 13, color: "var(--muted)" }}>Nothing overdue 🎉</div>
+        )}
+      </div>
+      {upcoming.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <button style={btnGhost} onClick={() => setShowUpcoming((x) => !x)}>
+            {showUpcoming ? "Hide" : "Show"} upcoming ({upcoming.length})
+          </button>
+          {showUpcoming && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+              {upcoming.map(renderRow)}
+            </div>
+          )}
+        </div>
+      )}
       {err && <div style={{ color: "#b91c1c", fontSize: 12, marginTop: 8 }}>{err}</div>}
     </div>
   );

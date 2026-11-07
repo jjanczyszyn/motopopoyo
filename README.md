@@ -52,7 +52,10 @@ unless they are overridden by hand.
 `config.dailyRate / weeklyRate / monthlyRate` always hold the **active**
 season's rates, so the site, contract and booking maths read them unchanged.
 Existing reservations store the rate they were booked at and are unaffected by
-a season switch.
+a season switch. Editing a booking's dates re-prices it from its **own** stored daily rate
+(`dailyRateUSD`), never today's season. An admin can set an **agreed price**
+(a negotiated deal); such bookings (`agreedPrice: true`) are never re-priced
+automatically.
 
 ## Google reviews
 
@@ -87,7 +90,21 @@ on a phone while a customer waits, and installable as a PWA.
 - **Recording a payment is one tap.** "Mark paid · $X" books the whole
   outstanding balance on the rental's start date with the booking's payment
   method and that method's default collector (`payments.markPaid`). Custom
-  amounts, methods or dates go through "Custom…" / "Edit".
+  amounts, methods or dates go through "Custom…" / "Edit". The Payments tab lists
+  **Overdue** bookings (rental started, nothing recorded) apart from
+  **Upcoming** ones, asks before recording, and never dates a payment in the
+  future.
+- **Booking integrity.** Every booking write (`create`, `adminCreate`,
+  `adminUpdate`) refuses a bike that is already held (pending, confirmed or
+  active) or blocked for maintenance on any of those days; a return day can be
+  the next renter's start day. Admins may save anyway after a warning (for
+  back-filling past rentals). Rules live in `convex/lib/integrity.ts`.
+- **Data checks.** Overpaid bookings show their credit ("+$X credit"). Names
+  the ID scan probably got wrong (an ID-card heading, initials only) are saved
+  with `needsReview` and get a "Check name" badge. `cancel`, `setDelivery`,
+  `attachDoc` and `attachSignature` require an admin login.
+- **Hand-made data changes** to production are recorded in
+  [`docs/data-log.md`](docs/data-log.md) and tagged in the record's notes.
 - Desktop keeps the wide tables, the column picker and the top tab row.
 
 ## Testing

@@ -146,8 +146,12 @@ export const markPaid = mutation({
 
     // Midday UTC on the start date: the money changes hands when the bike
     // does, and midday keeps the date stable either side of the timezone.
+    // Never date a payment in the future: for a rental that hasn't started
+    // yet, the money arrived today.
     const startMs = Date.parse(`${reservation.startDate}T12:00:00Z`);
-    const receivedAt = Number.isFinite(startMs) ? startMs : Date.now();
+    const receivedAt = Number.isFinite(startMs)
+      ? Math.min(startMs, Date.now())
+      : Date.now();
 
     const now = Date.now();
     const jjPct = reservation.jjSharePct ?? cfg?.jjSharePercentage ?? DEFAULT_JJ_PCT;
