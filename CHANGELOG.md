@@ -52,6 +52,9 @@
   when `E2E_ADMIN_USER` / `E2E_ADMIN_PASSWORD` are set.
 
 ### Changed
+- **Data log and handoff updated.** Renter names Karen confirmed later on
+  2026-11-07 are recorded in `docs/data-log.md`, and `handoff.md` reflects
+  this session's work and next steps.
 - **CI no longer needs a Convex secret.** The generated Convex types
   (`convex/_generated`) are now committed, as Convex recommends, so typecheck
   and tests run on a clean checkout without a deploy key.
