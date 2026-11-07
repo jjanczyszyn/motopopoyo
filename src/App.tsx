@@ -15,6 +15,7 @@ import { DoneScreen } from "./screens/Done";
 import { AdminScreen } from "./screens/Admin";
 import { useI18n } from "./i18n/I18nContext";
 import { errorText } from "./lib/convexError";
+import { track } from "./lib/telemetry";
 
 type Screen = "home" | "calendar" | "bike" | "ocr" | "phone" | "pay" | "contract" | "delivery" | "done";
 const SCREENS: Screen[] = ["home", "calendar", "bike", "ocr", "phone", "pay", "contract", "delivery", "done"];
@@ -55,6 +56,11 @@ function RentalFlow() {
   const generateUploadUrl = useMutation(api.storage.generateUploadUrl);
 
   const go = (s: Screen) => setScreen(s);
+  // One "step" event per screen the renter reaches: this is the booking funnel.
+  React.useEffect(() => {
+    if (window.location.pathname.startsWith("/admin")) return;
+    track("step", `screen:${screen}`);
+  }, [screen]);
   const next = () => {
     const i = SCREENS.indexOf(screen);
     if (i < SCREENS.length - 1) go(SCREENS[i + 1]);
@@ -125,9 +131,16 @@ function RentalFlow() {
         },
       });
       setDoneCode(result.code);
+      track("action", "booking_created", {
+        bookingCode: result.code,
+        detail: `${result.days} days, $${result.totalUSD}, ${state.payMethod ?? "cash"}`,
+      });
       go("done");
     } catch (err) {
       console.error("createReservation failed", err);
+      track("action", "booking_failed", {
+        detail: errorText(err).includes("BIKE_UNAVAILABLE") ? "bike taken" : "error",
+      });
       if (errorText(err).includes("BIKE_UNAVAILABLE")) {
         // Someone else booked this bike while the renter was filling in the
         // form: send them back to pick dates or another bike.

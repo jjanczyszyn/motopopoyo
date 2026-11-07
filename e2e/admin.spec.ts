@@ -130,6 +130,18 @@ test.describe("signed in", () => {
     }
   });
 
+  test("activity tab shows the booking funnel and an errors filter", async ({ page }) => {
+    await page.goto("/admin#activity");
+    await expect(page.getByText(/booking funnel/i)).toBeVisible();
+    await expect(page.getByText(/site visitors/i)).toBeVisible();
+    await page.getByRole("button", { name: /^errors$/i }).click();
+    await expect(page.getByRole("button", { name: /^errors$/i })).toBeVisible();
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+    );
+    expect(overflow).toBeLessThanOrEqual(2);
+  });
+
   test("bookings show pay status by default", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name === "mobile", "the table is desktop-only");
     await page.goto("/admin#bookings");
