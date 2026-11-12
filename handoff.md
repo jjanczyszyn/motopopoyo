@@ -1,4 +1,4 @@
-# Session handoff — 2026-11-07 03:55 UTC
+# Session handoff — 2026-11-12 23:50 UTC
 
 ## What this is
 
@@ -56,6 +56,15 @@ git, dev-vs-prod Convex split). Hand-made prod data changes are logged in
   earnings and share %, what each collected, and the balance between them,
   tapping through to Partner settlement.
 
+## Shipped 2026-11-12 (PR #12)
+
+- **Quick "New rental" link** for Karen: `moto.popoyo.co/new#t=<secret>`.
+  One screen: start → days → moto → price → Save (optional name, "paid
+  cash"). Secret = `QUICK_LINK_KAREN` in Convex **prod** env (read it with
+  `npx convex env get` using the prod key). Rotate it to revoke. A
+  `QUICK_LINK_JJ` slot exists, unset. Details in the README section.
+- Dev has one test booking from this work (KJ-4WFG-747), harmless.
+
 ## Shipped 2026-11-07 (PRs #7–#10)
 
 - Daily owner report email is **off** (#7). CI no longer needs a Convex
@@ -99,8 +108,8 @@ git, dev-vs-prod Convex split). Hand-made prod data changes are logged in
    period-selector consistency, the seasonality heatmap on phones.
 5. Untracked local files kept out of git on purpose: `ADMIN_DESIGN_SPEC.md`,
    `convex/_debugReport.ts`.
-5. **Karen and the admin.** Give her the `karen` login (already configured)
-   or a weekly "mark these paid" list. Still open from the back-fill: the
+5. **Karen and the admin.** She now has the quick link (sent 2026-11-12) for
+   new rentals; check the Activity log for `quick:saved` to see if she uses it. Still open from the back-fill: the
    renter name for KJ-B72R-767, and a voice note from 2026-11-07 that wasn't
    transcribed.
 6. **Next review items** (from the 2026-11-06 UX/operator review): renter

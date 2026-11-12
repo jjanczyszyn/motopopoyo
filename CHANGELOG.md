@@ -11,6 +11,9 @@
   anything, still refuses double-bookings, and stops working when its secret
   is rotated. (#12)
 
+### Changed
+- Handoff notes updated for the quick link. (#13)
+
 ### Removed
 - **Daily owner report email stopped.** The 03:00 UTC cron that emailed
   helo@popoyo.co is unscheduled; the report code stays so it can be
