@@ -4,25 +4,13 @@ import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { errorText } from "../lib/convexError";
 import { track } from "../lib/telemetry";
+import { LoginGate, useAdminAuth } from "./Admin";
 
-// /new#t=<secret> — the partner's one-screen "log a rental" page.
+// /new — the partner's one-screen "log a rental" page, behind the same
+// owner login as /admin (same session, so signing in on one signs in both).
 // Pick a bike, pick the days, check the price, save. Nothing else.
-// The secret stays in the URL hash (never sent to the web host) so the link
-// keeps working when saved to the home screen, and is kept in localStorage
-// as a fallback for a bare /new visit.
 
-const STORE_KEY = "kj-quick-token";
 const DAY_CHIPS = [1, 2, 3, 5, 7, 14, 30];
-
-function readToken(): string {
-  const m = window.location.hash.match(/[#&]t=([^&]+)/);
-  if (m) {
-    const t = decodeURIComponent(m[1]);
-    try { localStorage.setItem(STORE_KEY, t); } catch { /* private mode */ }
-    return t;
-  }
-  try { return localStorage.getItem(STORE_KEY) ?? ""; } catch { return ""; }
-}
 
 function addDays(iso: string, n: number): string {
   const d = new Date(`${iso}T00:00:00Z`);
@@ -56,27 +44,17 @@ const field: React.CSSProperties = {
 };
 
 export function QuickScreen() {
-  const [token] = React.useState(readToken);
-  const link = useQuery(api.quick.check, { token });
+  const { authed, token, tryPassword, logout } = useAdminAuth();
+  const me = useQuery(api.quick.me, authed && token ? { adminToken: token } : "skip");
 
-  if (link === undefined) return <div style={page}><div style={wrap}><p>Loading…</p></div></div>;
-  if (!link.ok) {
-    return (
-      <div style={page}>
-        <div style={{ ...wrap, textAlign: "center", paddingTop: 80 }}>
-          <div style={{ fontSize: 44 }}>🔒</div>
-          <h1 style={{ fontSize: 22, margin: "12px 0 8px" }}>This link isn't valid</h1>
-          <p style={{ color: "var(--muted)", fontSize: 16, lineHeight: 1.5 }}>
-            Ask JJ for a fresh link to add rentals.
-          </p>
-        </div>
-      </div>
-    );
+  if (!authed || !token) {
+    return <div style={page}><LoginGate onSubmit={tryPassword} /></div>;
   }
-  return <QuickForm token={token} who={link.who} today={link.today} />;
+  if (me === undefined) return <div style={page}><div style={wrap}><p>Loading…</p></div></div>;
+  return <QuickForm token={token} who={me.who} today={me.today} onLogout={logout} />;
 }
 
-function QuickForm({ token, who, today }: { token: string; who: string; today: string }) {
+function QuickForm({ token, who, today, onLogout }: { token: string; who: string; today: string; onLogout: () => void }) {
   const [start, setStart] = React.useState(today);
   const [days, setDays] = React.useState(1);
   const [bikeId, setBikeId] = React.useState<Id<"bikes"> | null>(null);
@@ -92,7 +70,7 @@ function QuickForm({ token, who, today }: { token: string; who: string; today: s
 
   // Keep showing the last answer while new dates load, so the bike list
   // doesn't blank out (and shift the page) on every tap.
-  const fresh = useQuery(api.quick.options, { token, startDate: start, days });
+  const fresh = useQuery(api.quick.options, { adminToken: token, startDate: start, days });
   const last = React.useRef(fresh);
   if (fresh !== undefined) last.current = fresh;
   const opts = fresh ?? last.current;
@@ -127,7 +105,7 @@ function QuickForm({ token, who, today }: { token: string; who: string; today: s
     setSaving(true); setError(null);
     try {
       const r = await create({
-        token, bikeId, startDate: start, days, priceUSD: priceNum,
+        adminToken: token, bikeId, startDate: start, days, priceUSD: priceNum,
         name: name.trim() || undefined, paid,
       });
       track("action", "quick:saved", { bookingCode: r.code });
@@ -167,7 +145,9 @@ function QuickForm({ token, who, today }: { token: string; who: string; today: s
     <div style={page}>
       <div style={wrap}>
         <h1 style={{ fontSize: 26, margin: "4px 0 2px" }}>New rental</h1>
-        <div style={{ fontSize: 14, color: "var(--muted)" }}>Hi {who} 👋</div>
+        <div style={{ fontSize: 14, color: "var(--muted)" }}>
+          Hi {who} 👋 · <button onClick={onLogout} style={linkBtn}>Log out</button>
+        </div>
 
         <div style={label}>1 · Start</div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>

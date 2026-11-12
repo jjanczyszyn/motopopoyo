@@ -9,32 +9,16 @@ import {
   addDaysISO,
   isISODate,
   statusForDates,
-  tokenMatches,
 } from "./lib/quick";
+import { assertAdmin, assertAdminRead } from "./admin";
 import { assertBikeFree, genCode } from "./reservations";
 
-// Quick "log a rental" link (the /new page). A partner opens a private link
-// whose secret lives in the Convex env (QUICK_LINK_KAREN / QUICK_LINK_JJ) and
-// can do exactly two things: see which bikes are free, and add a booking.
-// It can't read customer data, edit or cancel anything. Rotating the env var
-// kills the old link.
+// Quick "log a rental" page (/new). Behind the same owner login as /admin:
+// every call needs a live admin session token, and the booking is credited
+// to whoever is signed in.
 
-const LINKS = [
-  { env: "QUICK_LINK_KAREN", who: "Karen" as const },
-  { env: "QUICK_LINK_JJ", who: "JJ" as const },
-];
-
-function whoFor(token: string): "Karen" | "JJ" | null {
-  for (const l of LINKS) {
-    if (tokenMatches(token, process.env[l.env])) return l.who;
-  }
-  return null;
-}
-
-function assertLink(token: string): "Karen" | "JJ" {
-  const who = whoFor(token);
-  if (!who) throw new ConvexError("QUICK_LINK_INVALID: this link isn't valid any more.");
-  return who;
+function whoFor(username: string | undefined): "Karen" | "JJ" {
+  return username === "karen" ? "Karen" : "JJ";
 }
 
 /** Today in Popoyo (UTC-6, no DST). */
@@ -54,12 +38,12 @@ async function ratesFor(ctx: QueryCtx | MutationCtx) {
   };
 }
 
-/** Is the link valid, and whose is it. Lets the page show "not valid" early. */
-export const check = query({
-  args: { token: v.string() },
-  handler: async (_ctx, { token }) => {
-    const who = whoFor(token);
-    return who ? { ok: true as const, who, today: todayNicaragua() } : { ok: false as const };
+/** Who is signed in and today's date in Popoyo, for the page header. */
+export const me = query({
+  args: { adminToken: v.string() },
+  handler: async (ctx, { adminToken }) => {
+    const session = await assertAdminRead(ctx, adminToken);
+    return { who: whoFor(session.username), today: todayNicaragua() };
   },
 });
 
@@ -68,9 +52,9 @@ export const check = query({
  * plus the list price for that many days. No customer data leaves here.
  */
 export const options = query({
-  args: { token: v.string(), startDate: v.string(), days: v.number() },
-  handler: async (ctx, { token, startDate, days }) => {
-    assertLink(token);
+  args: { adminToken: v.string(), startDate: v.string(), days: v.number() },
+  handler: async (ctx, { adminToken, startDate, days }) => {
+    await assertAdminRead(ctx, adminToken);
     const { rates } = await ratesFor(ctx);
     const n = Math.max(1, Math.min(MAX_QUICK_DAYS, Math.round(days)));
     const valid = isISODate(startDate);
@@ -103,7 +87,7 @@ export const options = query({
 
 export const create = mutation({
   args: {
-    token: v.string(),
+    adminToken: v.string(),
     bikeId: v.id("bikes"),
     startDate: v.string(),
     days: v.number(),
@@ -112,7 +96,7 @@ export const create = mutation({
     paid: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const who = assertLink(args.token);
+    const who = whoFor((await assertAdmin(ctx, args.adminToken)).username);
     if (!isISODate(args.startDate)) throw new ConvexError("Pick a start date.");
     const days = Math.round(args.days);
     if (!(days >= 1 && days <= MAX_QUICK_DAYS)) {
@@ -179,7 +163,7 @@ export const create = mutation({
       deliveryAddr: "",
       deliveryHour: 10,
       source: "walk_in",
-      notes: `Added by ${who} via quick link`,
+      notes: `Added by ${who} via quick add`,
       createdAt: now,
       updatedAt: now,
     });

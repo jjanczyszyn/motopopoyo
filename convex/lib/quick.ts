@@ -1,24 +1,6 @@
 // Pure helpers for the quick "log a rental" link (convex/quick.ts, /new).
 // No database access, so they're unit-tested directly.
 
-/** Shortest token we accept as a link secret. Shorter env values are ignored. */
-export const MIN_TOKEN_LENGTH = 24;
-
-/**
- * True when `provided` matches `expected`. Compares every character so the
- * time taken doesn't reveal how much of a guess was right, and refuses an
- * unset or too-short secret so a missing env var never opens the door.
- */
-export function tokenMatches(provided: string, expected: string | undefined): boolean {
-  if (!expected || expected.length < MIN_TOKEN_LENGTH) return false;
-  if (typeof provided !== "string" || provided.length !== expected.length) return false;
-  let diff = 0;
-  for (let i = 0; i < expected.length; i++) {
-    diff |= provided.charCodeAt(i) ^ expected.charCodeAt(i);
-  }
-  return diff === 0;
-}
-
 /** ISO YYYY-MM-DD plus `n` days (UTC, so no DST surprises). */
 export function addDaysISO(iso: string, n: number): string {
   const d = new Date(`${iso}T00:00:00Z`);
