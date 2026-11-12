@@ -13,6 +13,7 @@ import { ContractScreen } from "./screens/Contract";
 import { DeliveryScreen } from "./screens/Delivery";
 import { DoneScreen } from "./screens/Done";
 import { AdminScreen } from "./screens/Admin";
+import { QuickScreen } from "./screens/Quick";
 import { useI18n } from "./i18n/I18nContext";
 import { errorText } from "./lib/convexError";
 import { track } from "./lib/telemetry";
@@ -35,6 +36,8 @@ export default function App() {
   const isAdmin =
     /\/admin\/?$/.test(path) || window.location.hash === "#/admin";
   if (isAdmin) return <AdminScreen />;
+  // Partner quick-add page: /new#t=<secret>.
+  if (/\/new\/?$/.test(path)) return <QuickScreen />;
   return <RentalFlow />;
 }
 
