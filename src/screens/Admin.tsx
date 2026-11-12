@@ -20,7 +20,7 @@ import { SectionErrorBoundary, useIsMobile } from "../admin/shared";
 // required by every admin-only mutation.
 const TOKEN_KEY = "kj-admin-token";
 
-function useAdminAuth() {
+export function useAdminAuth() {
   const [token, setToken] = React.useState<string | null>(() =>
     sessionStorage.getItem(TOKEN_KEY)
   );
@@ -159,7 +159,7 @@ function InstallHint() {
   );
 }
 
-function LoginGate({
+export function LoginGate({
   onSubmit,
 }: {
   onSubmit: (username: "karen" | "jj", pw: string) => Promise<boolean>;

@@ -1,23 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDaysISO, isISODate, statusForDates, tokenMatches } from "./quick";
-
-const SECRET = "a".repeat(16) + "b".repeat(16);
-
-describe("tokenMatches", () => {
-  it("accepts the exact secret", () => {
-    expect(tokenMatches(SECRET, SECRET)).toBe(true);
-  });
-  it("refuses a wrong or partial token", () => {
-    expect(tokenMatches(SECRET.slice(0, -1) + "c", SECRET)).toBe(false);
-    expect(tokenMatches(SECRET.slice(0, 10), SECRET)).toBe(false);
-    expect(tokenMatches("", SECRET)).toBe(false);
-  });
-  it("refuses everything when the secret is unset or too short", () => {
-    expect(tokenMatches("", undefined)).toBe(false);
-    expect(tokenMatches("", "")).toBe(false);
-    expect(tokenMatches("short", "short")).toBe(false);
-  });
-});
+import { addDaysISO, isISODate, statusForDates } from "./quick";
 
 describe("addDaysISO", () => {
   it("adds days across month and year ends", () => {

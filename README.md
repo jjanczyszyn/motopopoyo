@@ -107,25 +107,22 @@ on a phone while a customer waits, and installable as a PWA.
   [`docs/data-log.md`](docs/data-log.md) and tagged in the record's notes.
 - Desktop keeps the wide tables, the column picker and the top tab row.
 
-## Quick "New rental" link
+## Quick "New rental" page
 
-`moto.popoyo.co/new#t=<secret>` is a one-screen page for a partner to log a
-rental from their phone in a few taps: start day → number of days → moto →
-price → Save. Optional renter name and "already paid (cash)" toggle.
+`moto.popoyo.co/new` is a one-screen page for a partner to log a rental from
+their phone in a few taps: start day → number of days → moto → price → Save.
+Optional renter name and "already paid (cash)" toggle.
 
-- **Auth is the link.** The secret sits in the URL hash (never sent to the web
-  host) and is compared in Convex against `QUICK_LINK_KAREN` / `QUICK_LINK_JJ`
-  (≥24 chars; unset means the link is off). To revoke a link, set a new value:
-  `npx convex env set QUICK_LINK_KAREN "$(openssl rand -hex 20)"` on prod.
-- **What it can do** (`convex/quick.ts`): `check` (is the link valid),
-  `options` (active bikes, free/booked for the chosen days, list price) and
-  `create` (insert the booking). It can't read names, phones or payments, or
-  edit/cancel anything.
+- **Same login as `/admin`** (username + password, `ADMIN_KAREN_PASSWORD` /
+  `ADMIN_JJ_PASSWORD`), sharing its session, so signing in on one signs in both.
+- **Functions** (`convex/quick.ts`, all need an admin session): `me` (who's
+  signed in and today's date in Popoyo), `options` (active bikes, free/booked
+  for the chosen days, list price) and `create` (insert the booking).
 - **What a saved rental looks like:** source `walk_in`, note "Added by Karen
-  via quick link", status from the dates (ahead → confirmed, running → active,
+  via quick add", status from the dates (ahead → confirmed, running → active,
   past → returned), `agreedPrice` when the price differs from the list price,
   `needsReview` ("Check name") when no name was given. "Already paid" records
-  one cash payment collected by that partner, dated the start day.
+  one cash payment collected by the signed-in partner, dated the start day.
 - Same double-booking/maintenance guard as every other booking write; past
   rentals (back-fills) skip it. Helpers and tests: `convex/lib/quick.ts`.
 
@@ -170,7 +167,7 @@ kept 90 days).
 CI (`.github/workflows/ci.yml`) runs typecheck, unit tests, build and the e2e
 suite on every pull request. The signed-in admin e2e specs are skipped unless
 `E2E_ADMIN_USER` / `E2E_ADMIN_PASSWORD` are set (locally, or as repo secrets).
-The quick-add form spec runs only with `E2E_QUICK_TOKEN` set and never saves.
+The signed-in quick-add form spec uses the same variables and never saves.
 
 ## Deployment topology
 
@@ -192,7 +189,7 @@ src/
   screens/                    # one file per step in the rental flow
     Home.tsx Calendar.tsx BikePick.tsx OCR.tsx Phone.tsx
     Payment.tsx Contract.tsx Delivery.tsx Done.tsx Admin.tsx
-    Quick.tsx                 # /new partner quick-add page
+    Quick.tsx                 # /new partner quick-add page (owner login)
   hooks/useReservationDraft.ts
   lib/                        # pure logic with vitest coverage
     pricing.ts dates.ts countries.ts ocrParse.ts phone.ts assets.ts
@@ -200,7 +197,7 @@ convex/
   schema.ts                   # config / bikes / reservations / reviews
   config.ts bikes.ts reservations.ts reviews.ts
   contract.ts ocr.ts storage.ts crons.ts seed.ts
-  quick.ts                    # /new link: check / options / create
+  quick.ts                    # /new page: me / options / create
   lib/pricing.ts              # shared with frontend
 public/
   assets/                     # bike photos, logo, helmet, payment brand SVGs
