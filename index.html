@@ -118,6 +118,8 @@
     // Not on /admin: it's an internal operator tool, not a public page, and
     // the bar is fixed to the bottom — exactly where the admin tab bar lives.
     if (location.pathname.indexOf('/admin') === 0) return;
+    // Same for the partner quick-add page (/new): its Save button is pinned there.
+    if (location.pathname.indexOf('/new') === 0) return;
     function choose(v) {
       try { localStorage.setItem('ga_consent', v); } catch (e) {}
       if (typeof gtag === 'function') gtag('consent', 'update', { ad_storage: v, ad_user_data: v, ad_personalization: v, analytics_storage: v });

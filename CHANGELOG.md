@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+- **Quick "New rental" link for partners.** `moto.popoyo.co/new#t=…` opens a
+  one-screen phone page: pick the start day and number of days, tap the moto,
+  check the price (prefilled with the list price, editable), save. Optional
+  name and "already paid (cash)". No login, no ID scan. The link can only add
+  bookings and see which bikes are free; it can't read customer data or edit
+  anything, still refuses double-bookings, and stops working when its secret
+  is rotated. (#12)
+
 ### Removed
 - **Daily owner report email stopped.** The 03:00 UTC cron that emailed
   helo@popoyo.co is unscheduled; the report code stays so it can be

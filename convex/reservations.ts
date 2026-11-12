@@ -20,7 +20,7 @@ export const BIKE_UNAVAILABLE = "BIKE_UNAVAILABLE";
  * Throws when `bikeId` is already held by another booking, or blocked for
  * maintenance, on any day of [startDate, endDate).
  */
-async function assertBikeFree(
+export async function assertBikeFree(
   ctx: MutationCtx,
   want: {
     bikeId: Id<"bikes">;
@@ -59,7 +59,7 @@ async function assertBikeFree(
 }
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-function genCode(): string {
+export function genCode(): string {
   const pick = (n: number) =>
     Array.from(
       { length: n },
