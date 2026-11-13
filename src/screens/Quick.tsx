@@ -69,11 +69,17 @@ function QuickForm({ token, who, today, onLogout }: { token: string; who: string
   const [error, setError] = React.useState<string | null>(null);
   const [saved, setSaved] = React.useState<null | {
     code: string; bikeName: string; startDate: string; endDate: string; days: number; totalUSD: number;
+    kind: "new" | "edit" | "deleted";
   }>(null);
+  // Set while changing one of her own recent rentals (see "Tus motos").
+  const [editId, setEditId] = React.useState<Id<"reservations"> | null>(null);
+  const mine = useQuery(api.quick.mine, { adminToken: token });
+  const update = useMutation(api.quick.update);
+  const remove = useMutation(api.quick.remove);
 
   // Keep showing the last answer while new dates load, so the bike list
   // doesn't blank out (and shift the page) on every tap.
-  const fresh = useQuery(api.quick.options, { adminToken: token, startDate: start, days });
+  const fresh = useQuery(api.quick.options, { adminToken: token, startDate: start, days, excludeId: editId ?? undefined });
   const last = React.useRef(fresh);
   if (fresh !== undefined) last.current = fresh;
   const opts = fresh ?? last.current;
@@ -99,7 +105,7 @@ function QuickForm({ token, who, today, onLogout }: { token: string; who: string
   const canSave = !loading && !!bikeId && days >= 1 && price.trim() !== "" && Number.isFinite(priceNum) && priceNum >= 0 && !saving;
 
   const reset = () => {
-    setSaved(null); setBikeId(null); setDays(1); setStart(today);
+    setSaved(null); setEditId(null); setBikeId(null); setDays(1); setStart(today);
     setPriceTouched(false); setName(""); setPaid(true); setError(null);
   };
 
@@ -107,15 +113,49 @@ function QuickForm({ token, who, today, onLogout }: { token: string; who: string
     if (!canSave || !bikeId) return;
     setSaving(true); setError(null);
     try {
-      const r = await create({
-        adminToken: token, bikeId, startDate: start, days, priceUSD: priceNum,
-        name: name.trim() || undefined, paid,
-      });
-      track("action", "quick:saved", { bookingCode: r.code });
-      setSaved(r);
+      const input = { adminToken: token, bikeId, startDate: start, days, priceUSD: priceNum, name: name.trim() || undefined, paid };
+      if (editId) {
+        const r = await update({ ...input, id: editId });
+        track("action", "quick:edited", { bookingCode: r.code });
+        setSaved({ ...r, kind: "edit" });
+      } else {
+        const r = await create(input);
+        track("action", "quick:saved", { bookingCode: r.code });
+        setSaved({ ...r, kind: "new" });
+      }
     } catch (e) {
       const raw = errorText(e);
       track("error", "quick:save_failed", { detail: raw });
+      setError(spanishError(raw));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  type Mine = NonNullable<typeof mine>[number];
+  const startEdit = (m: Mine) => {
+    setEditId(m._id); setStart(m.startDate); setDays(m.days); setBikeId(m.bikeId);
+    setPrice(String(m.totalUSD)); setPriceTouched(true); setName(m.name); setPaid(m.paid);
+    setError(null);
+    track("action", "quick:edit_open", { bookingCode: m.code });
+    document.getElementById("quick-top")?.scrollIntoView();
+  };
+
+  const del = async () => {
+    if (!editId) return;
+    const m = mine?.find((x) => x._id === editId);
+    if (!window.confirm("¿Borrar esta moto alquilada?")) return;
+    setSaving(true); setError(null);
+    try {
+      const r = await remove({ adminToken: token, id: editId });
+      track("action", "quick:deleted", { bookingCode: r.code });
+      setSaved({
+        code: r.code, bikeName: m ? m.bikeName : "", startDate: start, endDate, days,
+        totalUSD: priceNum, kind: "deleted",
+      });
+    } catch (e) {
+      const raw = errorText(e);
+      track("error", "quick:delete_failed", { detail: raw });
       setError(spanishError(raw));
     } finally {
       setSaving(false);
@@ -127,10 +167,12 @@ function QuickForm({ token, who, today, onLogout }: { token: string; who: string
       <div style={page}>
         <div style={{ ...wrap, textAlign: "center", paddingTop: 60 }}>
           <div style={{
-            width: 72, height: 72, borderRadius: "50%", background: "#16a34a", color: "#fff",
+            width: 72, height: 72, borderRadius: "50%", background: saved.kind === "deleted" ? "#6b7280" : "#16a34a", color: "#fff",
             fontSize: 38, display: "inline-flex", alignItems: "center", justifyContent: "center",
-          }}>✓</div>
-          <h1 style={{ fontSize: 24, margin: "16px 0 6px" }}>Guardado</h1>
+          }}>{saved.kind === "deleted" ? "🗑️" : "✓"}</div>
+          <h1 style={{ fontSize: 24, margin: "16px 0 6px" }}>
+            {saved.kind === "deleted" ? "Borrado" : saved.kind === "edit" ? "Cambiado" : "Guardado"}
+          </h1>
           <p style={{ fontSize: 17, lineHeight: 1.5, margin: 0 }}>
             <b>{saved.bikeName}</b> · {saved.days} {saved.days === 1 ? "día" : "días"} · <b>${saved.totalUSD}</b>
           </p>
@@ -146,8 +188,8 @@ function QuickForm({ token, who, today, onLogout }: { token: string; who: string
 
   return (
     <div style={page} lang="es">
-      <div style={wrap}>
-        <h1 style={{ fontSize: 26, margin: "4px 0 2px" }}>🛵 Nueva moto alquilada</h1>
+      <div style={wrap} id="quick-top">
+        <h1 style={{ fontSize: 26, margin: "4px 0 2px" }}>{editId ? "✏️ Cambiar moto alquilada" : "🛵 Nueva moto alquilada"}</h1>
         <div style={{ fontSize: 14, color: "var(--muted)" }}>
           Hola {who} 👋 · <button onClick={onLogout} style={linkBtn}>Salir</button>
         </div>
@@ -257,6 +299,33 @@ function QuickForm({ token, who, today, onLogout }: { token: string; who: string
             {error}
           </div>
         )}
+
+        {editId && (
+          <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+            <button onClick={reset} style={{ ...field, flex: 1, fontWeight: 600 }}>↩️ No cambiar</button>
+            <button onClick={del} disabled={saving} style={{ ...field, flex: 1, fontWeight: 600, color: "#b91c1c", borderColor: "#fecaca" }}>🗑️ Borrar</button>
+          </div>
+        )}
+
+        {!editId && mine && mine.length > 0 && (
+          <div data-testid="quick-mine">
+            <div style={label}>✏️ Tus motos · puedes cambiarlas 24 horas</div>
+            {mine.map((m) => (
+              <div key={m._id} style={{
+                display: "flex", alignItems: "center", gap: 10, padding: 12, marginBottom: 8,
+                background: "#fff", border: "1px solid var(--line)", borderRadius: 14,
+              }}>
+                <span style={{ width: 18, height: 18, borderRadius: "50%", background: m.bikeColor, border: "1px solid rgba(0,0,0,.15)", flex: "0 0 auto" }} />
+                <div style={{ flex: 1, minWidth: 0, fontSize: 15, lineHeight: 1.35 }}>
+                  <div style={{ fontWeight: 700 }}>{m.bikeName} <span style={{ fontWeight: 400, color: "var(--muted)" }}>{m.bikePlate}</span></div>
+                  <div>{nice(m.startDate)} → {nice(m.endDate)} · <b>${m.totalUSD}</b> {m.paid ? "· 💵 pagado" : "· no pagado"}</div>
+                  {m.name && <div style={{ color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</div>}
+                </div>
+                <button onClick={() => startEdit(m)} style={{ ...chip(false), flex: "0 0 auto" }}>Cambiar</button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div style={{
@@ -265,7 +334,7 @@ function QuickForm({ token, who, today, onLogout }: { token: string; who: string
       }}>
         <div style={{ maxWidth: 480, margin: "0 auto" }}>
           <button onClick={save} disabled={!canSave} style={{ ...bigBtn, opacity: canSave ? 1 : 0.4 }}>
-            {saving ? "Guardando…" : !bikeId ? "Toca una moto 👆" : `✅ Guardar · $${Number.isFinite(priceNum) ? priceNum : 0}`}
+            {saving ? "Guardando…" : !bikeId ? "Toca una moto 👆" : `✅ ${editId ? "Guardar cambios" : "Guardar"} · $${Number.isFinite(priceNum) ? priceNum : 0}`}
           </button>
         </div>
       </div>

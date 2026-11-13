@@ -28,6 +28,16 @@ test("public API refuses quick-add calls without an admin session", async () => 
       priceUSD: 1,
     })
   ).rejects.toThrow();
+  // Listing, changing and deleting her recent rentals need a session too.
+  await expect(client.query(anyApi.quick.mine, { adminToken: bad })).rejects.toThrow();
+  const fakeRes = "j570000000000000000000000000000a";
+  await expect(
+    client.mutation(anyApi.quick.update, {
+      adminToken: bad, id: fakeRes, bikeId: "j970000000000000000000000000000a",
+      startDate: "2030-01-01", days: 1, priceUSD: 1, paid: true,
+    })
+  ).rejects.toThrow();
+  await expect(client.mutation(anyApi.quick.remove, { adminToken: bad, id: fakeRes })).rejects.toThrow();
 });
 
 // Signed in (E2E_ADMIN_USER / E2E_ADMIN_PASSWORD): the form works up to, but

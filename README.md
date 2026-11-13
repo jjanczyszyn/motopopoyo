@@ -126,6 +126,15 @@ simple Spanish (for Karen); server errors are mapped to plain Spanish in
   past → returned), `agreedPrice` when the price differs from the list price,
   `needsReview` ("Check name") when no name was given. "Already paid" records
   one cash payment collected by the signed-in partner, dated the start day.
+- **Changing a rental for 24 hours.** Under the form, "✏️ Tus motos" lists the
+  rentals the signed-in partner added on this page in the last 24 hours, each
+  with **Cambiar**, which reopens the form to edit the bike, dates, price, name
+  or paid. While editing, **Borrar** cancels the booking. Functions: `mine`, `update`
+  (`excludeId` on `options` keeps its own dates free), `remove`. Rule in
+  `canQuickEdit` (`convex/lib/quick.ts`): the author is read from the booking
+  note, it isn't cancelled, and it was created under 24h ago. Only payments
+  the page recorded (note "Marked paid on the quick link") are changed or removed.
+  After 24h, changes go through the admin.
 - Same double-booking/maintenance guard as every other booking write; past
   rentals (back-fills) skip it. Helpers and tests: `convex/lib/quick.ts`.
 

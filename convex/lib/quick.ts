@@ -27,3 +27,29 @@ export function statusForDates(
 
 /** Longest rental the quick link accepts. Anything longer goes via the admin. */
 export const MAX_QUICK_DAYS = 120;
+
+/** How long after adding a rental its author may still change it. */
+export const QUICK_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/** Note written on payments recorded by the quick-add page. */
+export const QUICK_PAYMENT_NOTE = "Marked paid on the quick link";
+
+/** Who added a booking through the quick-add page, read from its note. */
+export function quickAuthor(notes: string | undefined): "Karen" | "JJ" | null {
+  const m = /^Added by (Karen|JJ) via quick (?:add|link)\b/.exec(notes ?? "");
+  return m ? (m[1] as "Karen" | "JJ") : null;
+}
+
+/**
+ * True when `who` may still edit this booking from the quick-add page: they
+ * added it there, it isn't cancelled, and it was added under 24 hours ago.
+ */
+export function canQuickEdit(
+  r: { notes?: string; createdAt: number; status: string },
+  who: "Karen" | "JJ",
+  now: number
+): boolean {
+  if (quickAuthor(r.notes) !== who) return false;
+  if (r.status === "cancelled") return false;
+  return now - r.createdAt < QUICK_EDIT_WINDOW_MS;
+}
