@@ -12,6 +12,9 @@
   is rotated. (#12)
 
 ### Changed
+- **Rentals added on the "New rental" page count as paid by default.** The
+  "Ya me pagó" box starts ticked, so each saved rental records a cash payment
+  collected by Karen. Untick it for a renter who hasn't paid yet. (#16)
 - **The "New rental" page is now in simple Spanish** for Karen: login
   ("Nombre", "Clave", "Entrar"), "¿Qué día empieza?", "¿Cuántos días?",
   "¿Qué moto?", "¿Cuánto paga?", "Ya me pagó", "Guardar", with Spanish dates
