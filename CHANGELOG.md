@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- **Karen can change or delete her rentals for 24 hours.** The "New rental"
+  page lists the rentals she added in the last 24 hours under "✏️ Tus motos".
+  "Cambiar" reopens one to fix the moto, dates, price, name or paid. "Borrar"
+  removes one added by mistake. After 24 hours it's locked, and changes go
+  through the admin. (#17)
 - **Quick "New rental" link for partners.** `moto.popoyo.co/new#t=…` opens a
   one-screen phone page: pick the start day and number of days, tap the moto,
   check the price (prefilled with the list price, editable), save. Optional

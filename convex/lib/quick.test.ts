@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDaysISO, isISODate, statusForDates } from "./quick";
+import { addDaysISO, canQuickEdit, isISODate, quickAuthor, statusForDates } from "./quick";
 
 describe("addDaysISO", () => {
   it("adds days across month and year ends", () => {
@@ -29,5 +29,30 @@ describe("statusForDates", () => {
   });
   it("is returned when the return day has come", () => {
     expect(statusForDates("2026-11-08", "2026-11-12", today)).toBe("returned");
+  });
+});
+
+describe("quickAuthor / canQuickEdit", () => {
+  const now = Date.parse("2026-11-13T12:00:00Z");
+  const hour = 3600 * 1000;
+  const mine = { notes: "Added by Karen via quick add", createdAt: now - 2 * hour, status: "confirmed" };
+
+  it("reads the author from the note, old and new wording", () => {
+    expect(quickAuthor("Added by Karen via quick add")).toBe("Karen");
+    expect(quickAuthor("Added by JJ via quick link")).toBe("JJ");
+    expect(quickAuthor("walk-in, paid cash")).toBeNull();
+    expect(quickAuthor(undefined)).toBeNull();
+  });
+  it("lets the author edit within 24 hours", () => {
+    expect(canQuickEdit(mine, "Karen", now)).toBe(true);
+    expect(canQuickEdit({ ...mine, createdAt: now - 23.9 * hour }, "Karen", now)).toBe(true);
+  });
+  it("refuses after 24 hours", () => {
+    expect(canQuickEdit({ ...mine, createdAt: now - 24 * hour }, "Karen", now)).toBe(false);
+  });
+  it("refuses someone else's booking, a non-quick booking, or a cancelled one", () => {
+    expect(canQuickEdit(mine, "JJ", now)).toBe(false);
+    expect(canQuickEdit({ ...mine, notes: "from WhatsApp" }, "Karen", now)).toBe(false);
+    expect(canQuickEdit({ ...mine, status: "cancelled" }, "Karen", now)).toBe(false);
   });
 });
