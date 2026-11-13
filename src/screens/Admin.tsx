@@ -159,11 +159,21 @@ function InstallHint() {
   );
 }
 
+// Login copy. The admin uses English; the /new quick-add page uses simple
+// Spanish for Karen.
+const LOGIN_TEXT = {
+  en: { title: "Admin login", intro: "Enter your owner credentials.", user: "Username", pass: "Password", go: "Sign in", busy: "Signing in…", bad: "Invalid credentials." },
+  es: { title: "Entrar", intro: "Pon tu nombre y tu clave.", user: "Nombre", pass: "Clave", go: "Entrar", busy: "Entrando…", bad: "Nombre o clave mal. Intenta otra vez." },
+};
+
 export function LoginGate({
   onSubmit,
+  lang = "en",
 }: {
   onSubmit: (username: "karen" | "jj", pw: string) => Promise<boolean>;
+  lang?: "en" | "es";
 }) {
+  const L = LOGIN_TEXT[lang];
   const [usernameRaw, setUsernameRaw] = React.useState<string>(() =>
     sessionStorage.getItem("kj-admin-user") ?? ""
   );
@@ -183,9 +193,9 @@ export function LoginGate({
 
   return (
     <div style={{ maxWidth: 360, margin: "100px auto", padding: 24, border: "1px solid var(--line)", borderRadius: 16 }}>
-      <h2 style={{ margin: "0 0 12px", fontSize: 22 }}>Admin login</h2>
+      <h2 style={{ margin: "0 0 12px", fontSize: 22 }}>{L.title}</h2>
       <p style={{ fontSize: 13, color: "var(--muted)", marginTop: 0 }}>
-        Enter your owner credentials.
+        {L.intro}
       </p>
       <form onSubmit={async (e) => {
         e.preventDefault();
@@ -197,27 +207,27 @@ export function LoginGate({
         setBusy(false);
         // Generic message — never reveal whether the username or password was
         // the wrong half. Only owners know which usernames are valid.
-        if (!ok) setErr("Invalid credentials.");
+        if (!ok) setErr(L.bad);
       }}>
-        <div style={labelStyle}>Username</div>
+        <div style={labelStyle}>{L.user}</div>
         <input
           type="text"
           value={usernameRaw}
           onChange={(e) => { setUsernameRaw(e.target.value); setErr(null); }}
           autoFocus
-          placeholder="Username"
+          placeholder={L.user}
           autoComplete="username"
           autoCapitalize="none"
           autoCorrect="off"
           spellCheck={false}
           style={inputStyle(!!err)}
         />
-        <div style={labelStyle}>Password</div>
+        <div style={labelStyle}>{L.pass}</div>
         <input
           type="password"
           value={pw}
           onChange={(e) => { setPw(e.target.value); setErr(null); }}
-          placeholder="Password"
+          placeholder={L.pass}
           autoComplete="current-password"
           style={inputStyle(!!err)}
         />
@@ -229,7 +239,7 @@ export function LoginGate({
           background: "var(--ink)", color: "#fff", fontSize: 14, fontWeight: 600,
           opacity: (busy || !pw || !usernameRaw.trim()) ? 0.6 : 1,
           cursor: (busy || !pw || !usernameRaw.trim()) ? "default" : "pointer",
-        }}>{busy ? "Signing in…" : "Sign in"}</button>
+        }}>{busy ? L.busy : L.go}</button>
       </form>
     </div>
   );

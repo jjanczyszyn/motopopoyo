@@ -12,6 +12,10 @@
   is rotated. (#12)
 
 ### Changed
+- **The "New rental" page is now in simple Spanish** for Karen: login
+  ("Nombre", "Clave", "Entrar"), "¿Qué día empieza?", "¿Cuántos días?",
+  "¿Qué moto?", "¿Cuánto paga?", "Ya me pagó", "Guardar", with Spanish dates
+  and plain Spanish error messages. The admin stays in English. (#15)
 - **The "New rental" page now asks for the owner login** (the same username
   and password as the admin) instead of working from a secret link. The old
   link no longer works. Address: `moto.popoyo.co/new`. (#14)

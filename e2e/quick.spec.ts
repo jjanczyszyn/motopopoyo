@@ -3,10 +3,10 @@ import { test, expect } from "@playwright/test";
 // Partner quick-add page (/new), behind the owner login. Read-only: nothing
 // here saves a booking.
 
-test("quick-add page asks for the owner login first", async ({ page }) => {
+test("quick-add page asks for the owner login first, in Spanish", async ({ page }) => {
   await page.goto("/new");
-  await expect(page.getByRole("heading", { name: "Admin login" })).toBeVisible();
-  await expect(page.getByText("Which moto")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Entrar" })).toBeVisible();
+  await expect(page.getByText("¿Qué moto?")).toHaveCount(0);
 });
 
 test("public API refuses quick-add calls without an admin session", async () => {
@@ -37,22 +37,24 @@ test("signed in, the quick-add form fills in the list price and fits the screen"
   const password = process.env.E2E_ADMIN_PASSWORD;
   test.skip(!user || !password, "E2E_ADMIN_USER / E2E_ADMIN_PASSWORD not set");
   await page.goto("/new");
-  await page.getByPlaceholder("Username").fill(user!);
-  await page.getByPlaceholder("Password").fill(password!);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByPlaceholder("Nombre").fill(user!);
+  await page.getByPlaceholder("Clave").fill(password!);
+  await page.getByRole("button", { name: "Entrar" }).click();
 
-  await expect(page.getByText("Which moto")).toBeVisible();
+  await expect(page.getByText("¿Qué moto?")).toBeVisible();
   await expect(page.getByTestId("quick-bike").first()).toBeVisible();
 
   await page.getByRole("button", { name: "3", exact: true }).click();
   await expect(page.getByTestId("quick-days")).toHaveText("3");
-  await expect(page.getByLabel("Price in dollars")).toHaveValue(/^\d+(\.\d+)?$/);
+  // Wait for the bikes for the new dates, not the ones still on screen.
+  await expect(page.getByTestId("quick-bikes")).toHaveAttribute("data-loading", "false");
+  await expect(page.getByLabel("Precio en dólares")).toHaveValue(/^\d+(\.\d+)?$/);
 
-  await expect(page.getByRole("button", { name: /Pick a moto/ })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /Toca una moto/ })).toBeDisabled();
   const free = page.locator('[data-testid="quick-bike"]:not([disabled])').first();
   if (await free.count()) {
     await free.click();
-    await expect(page.getByRole("button", { name: /Save rental · \$/ })).toBeEnabled();
+    await expect(page.getByRole("button", { name: /Guardar · \$/ })).toBeEnabled();
   }
 
   const overflow = await page.evaluate(

@@ -4,6 +4,7 @@ import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { errorText } from "../lib/convexError";
 import { track } from "../lib/telemetry";
+import { spanishError } from "../lib/quickText";
 import { LoginGate, useAdminAuth } from "./Admin";
 
 // /new — the partner's one-screen "log a rental" page, behind the same
@@ -19,7 +20,7 @@ function addDays(iso: string, n: number): string {
 }
 
 function nice(iso: string): string {
-  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", {
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("es-NI", {
     weekday: "short", day: "numeric", month: "short", timeZone: "UTC",
   });
 }
@@ -48,9 +49,9 @@ export function QuickScreen() {
   const me = useQuery(api.quick.me, authed && token ? { adminToken: token } : "skip");
 
   if (!authed || !token) {
-    return <div style={page}><LoginGate onSubmit={tryPassword} /></div>;
+    return <div className="admin-root" style={page}><LoginGate onSubmit={tryPassword} lang="es" /></div>;
   }
-  if (me === undefined) return <div style={page}><div style={wrap}><p>Loading…</p></div></div>;
+  if (me === undefined) return <div style={page}><div style={wrap}><p>Cargando…</p></div></div>;
   return <QuickForm token={token} who={me.who} today={me.today} onLogout={logout} />;
 }
 
@@ -111,9 +112,9 @@ function QuickForm({ token, who, today, onLogout }: { token: string; who: string
       track("action", "quick:saved", { bookingCode: r.code });
       setSaved(r);
     } catch (e) {
-      const msg = errorText(e).replace(/^[A-Z_]+:\s*/, "");
-      track("error", "quick:save_failed", { detail: msg });
-      setError(msg);
+      const raw = errorText(e);
+      track("error", "quick:save_failed", { detail: raw });
+      setError(spanishError(raw));
     } finally {
       setSaving(false);
     }
@@ -127,49 +128,49 @@ function QuickForm({ token, who, today, onLogout }: { token: string; who: string
             width: 72, height: 72, borderRadius: "50%", background: "#16a34a", color: "#fff",
             fontSize: 38, display: "inline-flex", alignItems: "center", justifyContent: "center",
           }}>✓</div>
-          <h1 style={{ fontSize: 24, margin: "16px 0 6px" }}>Saved</h1>
+          <h1 style={{ fontSize: 24, margin: "16px 0 6px" }}>Guardado</h1>
           <p style={{ fontSize: 17, lineHeight: 1.5, margin: 0 }}>
-            <b>{saved.bikeName}</b> · {saved.days} {saved.days === 1 ? "day" : "days"} · <b>${saved.totalUSD}</b>
+            <b>{saved.bikeName}</b> · {saved.days} {saved.days === 1 ? "día" : "días"} · <b>${saved.totalUSD}</b>
           </p>
           <p style={{ fontSize: 15, color: "var(--muted)", margin: "4px 0 0" }}>
-            {nice(saved.startDate)} → back {nice(saved.endDate)}
+            {nice(saved.startDate)} → vuelve {nice(saved.endDate)}
           </p>
           <p style={{ fontSize: 13, color: "var(--muted)", fontFamily: "JetBrains Mono, monospace" }}>{saved.code}</p>
-          <button onClick={reset} style={{ ...bigBtn, marginTop: 28 }}>+ Add another rental</button>
+          <button onClick={reset} style={{ ...bigBtn, marginTop: 28 }}>+ Otra moto</button>
         </div>
       </div>
     );
   }
 
   return (
-    <div style={page}>
+    <div style={page} lang="es">
       <div style={wrap}>
-        <h1 style={{ fontSize: 26, margin: "4px 0 2px" }}>New rental</h1>
+        <h1 style={{ fontSize: 26, margin: "4px 0 2px" }}>🛵 Nueva moto alquilada</h1>
         <div style={{ fontSize: 14, color: "var(--muted)" }}>
-          Hi {who} 👋 · <button onClick={onLogout} style={linkBtn}>Log out</button>
+          Hola {who} 👋 · <button onClick={onLogout} style={linkBtn}>Salir</button>
         </div>
 
-        <div style={label}>1 · Start</div>
+        <div style={label}>📅 ¿Qué día empieza?</div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <button style={chip(start === today)} onClick={() => setStart(today)}>Today</button>
-          <button style={chip(start === addDays(today, 1))} onClick={() => setStart(addDays(today, 1))}>Tomorrow</button>
+          <button style={chip(start === today)} onClick={() => setStart(today)}>Hoy</button>
+          <button style={chip(start === addDays(today, 1))} onClick={() => setStart(addDays(today, 1))}>Mañana</button>
           <input
-            type="date" aria-label="Start date" value={start}
+            type="date" aria-label="Día que empieza" value={start}
             onChange={(e) => e.target.value && setStart(e.target.value)}
             style={{ ...field, width: "auto", flex: "1 1 150px", minHeight: 48 }}
           />
         </div>
 
-        <div style={label}>2 · How many days</div>
+        <div style={label}>🔢 ¿Cuántos días?</div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-          <button aria-label="One day less" style={{ ...chip(false), fontSize: 24, width: 56 }} onClick={() => setDays((d) => Math.max(1, d - 1))}>−</button>
+          <button aria-label="Un día menos" style={{ ...chip(false), fontSize: 24, width: 56 }} onClick={() => setDays((d) => Math.max(1, d - 1))}>−</button>
           <div style={{ flex: 1, textAlign: "center" }}>
             <div data-testid="quick-days" style={{ fontSize: 34, fontWeight: 800, lineHeight: 1 }}>{days}</div>
             <div style={{ fontSize: 14, color: "var(--muted)", marginTop: 4 }}>
-              {nice(start)} → back {nice(endDate)}
+              {nice(start)} → vuelve {nice(endDate)}
             </div>
           </div>
-          <button aria-label="One day more" style={{ ...chip(false), fontSize: 24, width: 56 }} onClick={() => setDays((d) => Math.min(120, d + 1))}>+</button>
+          <button aria-label="Un día más" style={{ ...chip(false), fontSize: 24, width: 56 }} onClick={() => setDays((d) => Math.min(120, d + 1))}>+</button>
         </div>
         <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
           {DAY_CHIPS.map((n) => (
@@ -177,11 +178,11 @@ function QuickForm({ token, who, today, onLogout }: { token: string; who: string
           ))}
         </div>
 
-        <div style={label}>3 · Which moto</div>
+        <div style={label}>🛵 ¿Qué moto?</div>
         {!opts ? (
-          <p style={{ color: "var(--muted)" }}>Loading bikes…</p>
+          <p style={{ color: "var(--muted)" }}>Cargando motos…</p>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div data-testid="quick-bikes" data-loading={loading ? "true" : "false"} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             {opts.bikes.map((b) => {
               const usable = b.free || isPast;
               const on = bikeId === b._id;
@@ -203,7 +204,7 @@ function QuickForm({ token, who, today, onLogout }: { token: string; who: string
                   <span style={{ minWidth: 0 }}>
                     <span style={{ display: "block", fontSize: 16, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b.name}</span>
                     <span style={{ display: "block", fontSize: 13, color: usable ? "var(--muted)" : "#b91c1c" }}>
-                      {usable ? (on ? "Selected ✓" : b.plate || b.type) : "Booked"}
+                      {usable ? (on ? "Esta ✓" : b.plate || b.type) : "Ocupada"}
                     </span>
                   </span>
                 </button>
@@ -212,11 +213,11 @@ function QuickForm({ token, who, today, onLogout }: { token: string; who: string
           </div>
         )}
 
-        <div style={label}>4 · Price (USD)</div>
+        <div style={label}>💵 ¿Cuánto paga? (dólares)</div>
         <div style={{ position: "relative" }}>
           <span style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)", fontSize: 22, fontWeight: 700 }}>$</span>
           <input
-            inputMode="decimal" aria-label="Price in dollars" value={price}
+            inputMode="decimal" aria-label="Precio en dólares" value={price}
             onChange={(e) => { setPrice(e.target.value); setPriceTouched(true); }}
             style={{ ...field, paddingLeft: 36, fontSize: 24, fontWeight: 700, minHeight: 60 }}
           />
@@ -224,14 +225,14 @@ function QuickForm({ token, who, today, onLogout }: { token: string; who: string
         <div style={{ fontSize: 14, color: "var(--muted)", marginTop: 6 }}>
           {listPrice !== undefined && (
             priceTouched && priceNum !== listPrice
-              ? <>Your price · list is ${listPrice} <button onClick={() => setPriceTouched(false)} style={linkBtn}>use list</button></>
-              : <>List price for {days} {days === 1 ? "day" : "days"}</>
+              ? <>Normal: ${listPrice} <button onClick={() => setPriceTouched(false)} style={linkBtn}>poner normal</button></>
+              : <>Precio normal. Puedes cambiarlo.</>
           )}
         </div>
 
-        <div style={label}>Optional</div>
+        <div style={label}>Si quieres (no es necesario)</div>
         <input
-          placeholder="Name (optional)" aria-label="Renter name" value={name}
+          placeholder="Nombre del cliente" aria-label="Nombre del cliente" value={name}
           onChange={(e) => setName(e.target.value)} autoComplete="off" style={field}
         />
         <button
@@ -246,7 +247,7 @@ function QuickForm({ token, who, today, onLogout }: { token: string; who: string
             border: paid ? "none" : "2px solid var(--line)", background: paid ? "#16a34a" : "#fff",
             color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 16,
           }}>{paid ? "✓" : ""}</span>
-          <span>Already paid to me (cash)</span>
+          <span>💵 Ya me pagó</span>
         </button>
 
         {error && (
@@ -262,7 +263,7 @@ function QuickForm({ token, who, today, onLogout }: { token: string; who: string
       }}>
         <div style={{ maxWidth: 480, margin: "0 auto" }}>
           <button onClick={save} disabled={!canSave} style={{ ...bigBtn, opacity: canSave ? 1 : 0.4 }}>
-            {saving ? "Saving…" : !bikeId ? "Pick a moto" : `Save rental · $${Number.isFinite(priceNum) ? priceNum : 0}`}
+            {saving ? "Guardando…" : !bikeId ? "Toca una moto 👆" : `✅ Guardar · $${Number.isFinite(priceNum) ? priceNum : 0}`}
           </button>
         </div>
       </div>

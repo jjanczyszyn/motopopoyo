@@ -111,7 +111,9 @@ on a phone while a customer waits, and installable as a PWA.
 
 `moto.popoyo.co/new` is a one-screen page for a partner to log a rental from
 their phone in a few taps: start day → number of days → moto → price → Save.
-Optional renter name and "already paid (cash)" toggle.
+Optional renter name and "already paid (cash)" toggle. The page is in
+simple Spanish (for Karen); server errors are mapped to plain Spanish in
+`src/lib/quickText.ts`.
 
 - **Same login as `/admin`** (username + password, `ADMIN_KAREN_PASSWORD` /
   `ADMIN_JJ_PASSWORD`), sharing its session, so signing in on one signs in both.
