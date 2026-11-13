@@ -62,7 +62,9 @@ function QuickForm({ token, who, today, onLogout }: { token: string; who: string
   const [price, setPrice] = React.useState("");
   const [priceTouched, setPriceTouched] = React.useState(false);
   const [name, setName] = React.useState("");
-  const [paid, setPaid] = React.useState(false);
+  // On by default: most rentals are paid in cash at handover (owner's call,
+  // 2026-11-13). Karen unticks it when someone hasn't paid yet.
+  const [paid, setPaid] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [saved, setSaved] = React.useState<null | {
@@ -98,7 +100,7 @@ function QuickForm({ token, who, today, onLogout }: { token: string; who: string
 
   const reset = () => {
     setSaved(null); setBikeId(null); setDays(1); setStart(today);
-    setPriceTouched(false); setName(""); setPaid(false); setError(null);
+    setPriceTouched(false); setName(""); setPaid(true); setError(null);
   };
 
   const save = async () => {
@@ -236,7 +238,7 @@ function QuickForm({ token, who, today, onLogout }: { token: string; who: string
           onChange={(e) => setName(e.target.value)} autoComplete="off" style={field}
         />
         <button
-          onClick={() => setPaid((p) => !p)} aria-pressed={paid}
+          onClick={() => setPaid((p) => !p)} aria-pressed={paid} data-testid="quick-paid"
           style={{
             ...field, marginTop: 10, display: "flex", alignItems: "center", gap: 12, textAlign: "left",
             border: paid ? "2px solid #16a34a" : field.border,

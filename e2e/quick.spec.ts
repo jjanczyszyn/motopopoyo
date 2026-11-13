@@ -50,6 +50,8 @@ test("signed in, the quick-add form fills in the list price and fits the screen"
   await expect(page.getByTestId("quick-bikes")).toHaveAttribute("data-loading", "false");
   await expect(page.getByLabel("Precio en dólares")).toHaveValue(/^\d+(\.\d+)?$/);
 
+  // "Ya me pagó" starts ticked: rentals are paid in cash by default.
+  await expect(page.getByTestId("quick-paid")).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("button", { name: /Toca una moto/ })).toBeDisabled();
   const free = page.locator('[data-testid="quick-bike"]:not([disabled])').first();
   if (await free.count()) {
