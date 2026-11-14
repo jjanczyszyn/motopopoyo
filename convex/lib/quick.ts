@@ -45,11 +45,19 @@ export function quickAuthor(notes: string | undefined): "Karen" | "JJ" | null {
  * added it there, it isn't cancelled, and it was added under 24 hours ago.
  */
 export function canQuickEdit(
-  r: { notes?: string; createdAt: number; status: string },
+  r: { notes?: string; createdAt: number; status: string; deletedAt?: number },
   who: "Karen" | "JJ",
   now: number
 ): boolean {
   if (quickAuthor(r.notes) !== who) return false;
-  if (r.status === "cancelled") return false;
+  if (r.status === "cancelled" || r.deletedAt !== undefined) return false;
   return now - r.createdAt < QUICK_EDIT_WINDOW_MS;
+}
+
+/**
+ * Which rows an admin list shows: deleted ones are hidden unless the
+ * "Deleted" log is asked for, which then shows only those.
+ */
+export function inDeletedView(r: { deletedAt?: number }, deletedView: boolean): boolean {
+  return deletedView ? r.deletedAt !== undefined : r.deletedAt === undefined;
 }

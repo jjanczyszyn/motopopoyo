@@ -5,6 +5,7 @@ import type { Id } from "./_generated/dataModel";
 import { computeTotal, daysBetweenISO } from "./lib/pricing";
 import { outstanding, payStatusFor, receivedTotal } from "./lib/balance";
 import { assertAdmin, assertAdminRead } from "./admin";
+import { inDeletedView } from "./lib/quick";
 import { DEFAULT_JJ_PCT, DEFAULT_KAREN_PCT } from "./lib/settlement";
 import {
   blockedDays,
@@ -197,6 +198,7 @@ export const list = query({
     await assertAdminRead(ctx, adminToken);
     const all = await ctx.db.query("reservations").order("desc").collect();
     return all.filter((r) => {
+      if (!inDeletedView(r, false)) return false;
       if (status && r.status !== status) return false;
       if (fromISO && r.endDate <= fromISO) return false;
       if (toISO && r.startDate >= toISO) return false;
@@ -211,8 +213,10 @@ export const listForAdmin = query({
     adminToken: v.string(),
     status: v.optional(v.string()),
     source: v.optional(v.string()),
+    // true → only soft-deleted rentals (the "Deleted" log); otherwise they're hidden.
+    deleted: v.optional(v.boolean()),
   },
-  handler: async (ctx, { adminToken, status, source }) => {
+  handler: async (ctx, { adminToken, status, source, deleted }) => {
     await assertAdminRead(ctx, adminToken);
     const reservations = await ctx.db.query("reservations").order("desc").collect();
     const bikes = await ctx.db.query("bikes").collect();
@@ -220,6 +224,7 @@ export const listForAdmin = query({
     const bikeById = new Map(bikes.map((b) => [b._id, b]));
     return reservations
       .filter((r) => {
+        if (!inDeletedView(r, deleted === true)) return false;
         if (status && r.status !== status) return false;
         if (source && (r.source ?? "other") !== source) return false;
         return true;

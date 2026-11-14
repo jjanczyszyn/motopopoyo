@@ -202,6 +202,9 @@ export function Bookings({ adminToken }: Props) {
   // the manager only sees bookings that still matter; flip off to audit
   // everything (and the explicit status="cancelled" filter still works).
   const [hideCancelled, setHideCancelled] = React.useState(true);
+  // Rentals deleted on the quick-add page are kept for the record but hidden;
+  // this shows only those.
+  const [showDeleted, setShowDeleted] = React.useState(false);
 
   const rawBookings = useQuery(
     api.reservations.listForAdmin,
@@ -209,14 +212,15 @@ export function Bookings({ adminToken }: Props) {
       adminToken,
       status: statusFilter || undefined,
       source: sourceFilter || undefined,
+      deleted: showDeleted || undefined,
     }
   );
   const filteredBookings = React.useMemo(() => {
     if (!rawBookings) return rawBookings;
-    if (!hideCancelled) return rawBookings;
+    if (!hideCancelled || showDeleted) return rawBookings;
     if (statusFilter === "cancelled") return rawBookings; // user asked for them
     return rawBookings.filter((r) => r.status !== "cancelled");
-  }, [rawBookings, hideCancelled, statusFilter]);
+  }, [rawBookings, hideCancelled, showDeleted, statusFilter]);
   const cancelledHidden = (rawBookings?.length ?? 0) - (filteredBookings?.length ?? 0);
 
   // Sort + column-visibility state. Both persist across reloads via
@@ -405,6 +409,15 @@ export function Bookings({ adminToken }: Props) {
               {hideCancelled ? "✓ " : ""}Hide cancelled
               {hideCancelled && cancelledHidden > 0 ? ` (${cancelledHidden})` : ""}
             </button>
+            <button
+              type="button"
+              onClick={() => setShowDeleted((v) => !v)}
+              aria-pressed={showDeleted}
+              data-testid="bookings-deleted-log"
+              style={showDeleted ? btnPrimary : btnGhost}
+            >
+              {showDeleted ? "✓ " : ""}🗑️ Deleted log
+            </button>
           </div>
         )}
 
@@ -456,6 +469,16 @@ export function Bookings({ adminToken }: Props) {
           {hideCancelled && cancelledHidden > 0 && (
             <span style={{ opacity: 0.7, fontSize: 11 }}>({cancelledHidden})</span>
           )}
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowDeleted((v) => !v)}
+          aria-pressed={showDeleted}
+          data-testid="bookings-deleted-log"
+          title="Rentals deleted on the New rental page, kept for the record"
+          style={showDeleted ? btnPrimary : btnGhost}
+        >
+          {showDeleted ? "✓ " : ""}🗑️ Deleted log
         </button>
         {!mobile && (
           <div style={{ position: "relative" }}>

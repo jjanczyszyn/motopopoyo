@@ -42,6 +42,7 @@ export const listAll = query({
     await assertAdminRead(ctx, adminToken);
     const all = await ctx.db.query("payments").collect();
     return all.filter((p) => {
+      if (p.deletedAt !== undefined) return false; // soft-deleted with its rental
       if (onlyReceived && p.status !== "received") return false;
       const t = p.receivedAt ?? p.createdAt;
       if (fromMs !== undefined && t < fromMs) return false;

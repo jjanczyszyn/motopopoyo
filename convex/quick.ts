@@ -1,5 +1,5 @@
 import { ConvexError, v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { computeTotal } from "./lib/pricing";
 import { blockedDays, findOverlap } from "./lib/integrity";
@@ -10,6 +10,7 @@ import {
   isISODate,
   statusForDates,
   canQuickEdit,
+  quickAuthor,
   QUICK_PAYMENT_NOTE,
 } from "./lib/quick";
 import type { Id } from "./_generated/dataModel";
@@ -327,9 +328,13 @@ export const update = mutation({
           receivedAt, notes: QUICK_PAYMENT_NOTE, createdAt: now, updatedAt: now,
         });
       }
-      for (const p of extra) await ctx.db.delete(p._id);
+      for (const p of extra) await ctx.db.patch(p._id, { status: "cancelled", updatedAt: now });
     } else {
-      for (const p of existing) await ctx.db.delete(p._id);
+      // Unticked "paid": keep the payment on record but cancelled, so it
+      // counts for nothing.
+      for (const p of existing) {
+        if (p.status !== "cancelled") await ctx.db.patch(p._id, { status: "cancelled", updatedAt: now });
+      }
     }
 
     const bikeName = bike.plate ? `${bike.name} (${bike.plate})` : bike.name;
@@ -341,13 +346,39 @@ export const update = mutation({
 export const remove = mutation({
   args: { adminToken: v.string(), id: v.id("reservations") },
   handler: async (ctx, { adminToken, id }) => {
-    const { r } = await editableBooking(ctx, adminToken, id);
-    for (const p of await quickPayments(ctx, r._id)) await ctx.db.delete(p._id);
+    const { who, r } = await editableBooking(ctx, adminToken, id);
+    const now = Date.now();
+    // Soft delete: nothing is erased. The rental and its payment stay in the
+    // database for the record, marked deleted and cancelled, so they're
+    // hidden from the admin lists and left out of every total.
+    for (const p of await quickPayments(ctx, r._id)) {
+      await ctx.db.patch(p._id, { status: "cancelled", deletedAt: now, updatedAt: now });
+    }
     await ctx.db.patch(r._id, {
       status: "cancelled",
-      notes: `${r.notes ?? ""} · deleted on the quick-add page`,
-      updatedAt: Date.now(),
+      deletedAt: now,
+      deletedBy: who,
+      notes: `${r.notes ?? ""} · deleted on the quick-add page by ${who}`,
+      updatedAt: now,
     });
     return { code: r.code };
+  },
+});
+
+/**
+ * One-off backfill: rentals deleted on the quick-add page before soft delete
+ * existed carry only a note. Give them `deletedAt` so they join the log.
+ */
+export const backfillDeleted = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    let n = 0;
+    for (const r of await ctx.db.query("reservations").collect()) {
+      if (r.deletedAt === undefined && /deleted on the quick-add page/.test(r.notes ?? "")) {
+        await ctx.db.patch(r._id, { deletedAt: r.updatedAt, deletedBy: quickAuthor(r.notes) ?? undefined });
+        n++;
+      }
+    }
+    return { backfilled: n };
   },
 });

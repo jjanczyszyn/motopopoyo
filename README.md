@@ -129,12 +129,21 @@ simple Spanish (for Karen); server errors are mapped to plain Spanish in
 - **Changing a rental for 24 hours.** Under the form, "✏️ Tus motos" lists the
   rentals the signed-in partner added on this page in the last 24 hours, each
   with **Cambiar**, which reopens the form to edit the bike, dates, price, name
-  or paid. While editing, **Borrar** cancels the booking. Functions: `mine`, `update`
+  or paid. While editing, **Borrar** soft-deletes the booking (below). Functions: `mine`, `update`
   (`excludeId` on `options` keeps its own dates free), `remove`. Rule in
   `canQuickEdit` (`convex/lib/quick.ts`): the author is read from the booking
   note, it isn't cancelled, and it was created under 24h ago. Only payments
-  the page recorded (note "Marked paid on the quick link") are changed or removed.
-  After 24h, changes go through the admin.
+  the page recorded (note "Marked paid on the quick link") are changed; unticking
+  paid cancels that payment rather than erasing it. After 24h, changes go
+  through the admin.
+- **Soft delete (kept for the record).** Nothing is erased. Borrar sets the
+  reservation to `cancelled` with `deletedAt` / `deletedBy`, and its quick
+  payment to `cancelled` with `deletedAt`. Cancelled bookings and non-received
+  payments already count for nothing (revenue, settlement, occupancy, the daily
+  report, availability). `reservations.list` / `listForAdmin` and
+  `payments.list` hide deleted rows; `listForAdmin({deleted: true})` returns
+  only them, shown in the admin under Bookings → **🗑️ Deleted log**.
+  `quick:backfillDeleted` (internal, one-off) flags rentals deleted before this.
 - Same double-booking/maintenance guard as every other booking write; past
   rentals (back-fills) skip it. Helpers and tests: `convex/lib/quick.ts`.
 

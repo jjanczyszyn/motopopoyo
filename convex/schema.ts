@@ -131,6 +131,11 @@ export default defineSchema({
     karenSharePct: v.optional(v.number()),
     notes: v.optional(v.string()),
 
+    // Soft delete: a rental deleted on the quick-add page is kept for the
+    // record (status "cancelled") but hidden from the admin and every total.
+    deletedAt: v.optional(v.number()),
+    deletedBy: v.optional(v.string()),
+
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -162,6 +167,8 @@ export default defineSchema({
     ),
     receivedAt: v.optional(v.number()), // ms epoch; required when status=received
     notes: v.optional(v.string()),
+    // Set (with status "cancelled") when its rental was soft-deleted.
+    deletedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
