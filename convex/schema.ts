@@ -169,6 +169,13 @@ export default defineSchema({
     notes: v.optional(v.string()),
     // Set (with status "cancelled") when its rental was soft-deleted.
     deletedAt: v.optional(v.number()),
+    // Electronic money is checked against JJ's own records (payment emails).
+    // Unset for cash and anything recorded before this existed.
+    verification: v.optional(
+      v.union(v.literal("unverified"), v.literal("verified"), v.literal("mismatch"))
+    ),
+    verifiedAt: v.optional(v.number()),
+    verifyRef: v.optional(v.string()), // short pointer, e.g. "PayPal email 2026-03-02"
     createdAt: v.number(),
     updatedAt: v.number(),
   })

@@ -17,6 +17,11 @@
   is rotated. (#12)
 
 ### Changed
+- **Website bookings count as paid as soon as they're made.** Cash is counted
+  on the hand-off day and collected by Karen. Electronic payments are counted
+  right away but flagged "⚠ unverified" in the admin until they're checked
+  against JJ's payment emails. The three unpaid website bookings were updated
+  the same way. (#20)
 - **Admins can soft-delete a mistaken rental after the 24 hours.** It's kept on
   record like a Borrar from the "New rental" page, with all its payments
   cancelled, and shows in the Deleted log. (#19)

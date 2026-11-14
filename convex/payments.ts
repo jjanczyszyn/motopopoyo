@@ -225,3 +225,45 @@ export const remove = mutation({
     await ctx.db.delete(paymentId);
   },
 });
+
+/** Electronic payments still waiting to be checked against JJ's records. */
+export const toVerify = query({
+  args: { adminToken: v.string() },
+  handler: async (ctx, { adminToken }) => {
+    await assertAdminRead(ctx, adminToken);
+    const rows = (await ctx.db.query("payments").collect()).filter(
+      (p) => p.verification === "unverified" && p.status === "received" && p.deletedAt === undefined
+    );
+    const out = [];
+    for (const p of rows) {
+      const r = await ctx.db.get(p.reservationId);
+      out.push({
+        paymentId: p._id, amount: p.amount, method: p.method, receivedAt: p.receivedAt,
+        code: r?.code ?? "?", startDate: r?.startDate, name: r ? `${r.docFirstName} ${r.docLastName}`.trim() : "",
+      });
+    }
+    return out;
+  },
+});
+
+/** Mark an electronic payment checked (or not matching) against JJ's records. */
+export const setVerification = mutation({
+  args: {
+    adminToken: v.string(),
+    paymentId: v.id("payments"),
+    verification: v.union(v.literal("unverified"), v.literal("verified"), v.literal("mismatch")),
+    ref: v.optional(v.string()),
+  },
+  handler: async (ctx, { adminToken, paymentId, verification, ref }) => {
+    await assertAdmin(ctx, adminToken);
+    const p = await ctx.db.get(paymentId);
+    if (!p) throw new Error("Payment not found.");
+    const now = Date.now();
+    await ctx.db.patch(paymentId, {
+      verification,
+      verifiedAt: verification === "unverified" ? undefined : now,
+      verifyRef: ref?.trim().slice(0, 120) || undefined,
+      updatedAt: now,
+    });
+  },
+});

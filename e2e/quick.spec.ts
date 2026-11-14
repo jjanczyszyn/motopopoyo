@@ -39,6 +39,7 @@ test("public API refuses quick-add calls without an admin session", async () => 
   ).rejects.toThrow();
   await expect(client.mutation(anyApi.quick.remove, { adminToken: bad, id: fakeRes })).rejects.toThrow();
   await expect(client.mutation(anyApi.quick.adminDelete, { adminToken: bad, id: fakeRes })).rejects.toThrow();
+  await expect(client.query(anyApi.payments.toVerify, { adminToken: bad })).rejects.toThrow();
 });
 
 // Signed in (E2E_ADMIN_USER / E2E_ADMIN_PASSWORD): the form works up to, but
