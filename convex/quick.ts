@@ -366,6 +366,36 @@ export const remove = mutation({
 });
 
 /**
+ * Admin soft delete for a rental entered by mistake, at any age (past the
+ * partner's 24 hours). Same as the page's Borrar: the rental and all its
+ * payments stay on record, cancelled and marked deleted, counted nowhere.
+ */
+export const adminDelete = mutation({
+  args: { adminToken: v.string(), id: v.id("reservations"), reason: v.optional(v.string()) },
+  handler: async (ctx, { adminToken, id, reason }) => {
+    const who = whoFor((await assertAdmin(ctx, adminToken)).username);
+    const r = await ctx.db.get(id);
+    if (!r) throw new ConvexError("That rental doesn't exist.");
+    if (r.deletedAt !== undefined) return { code: r.code };
+    const now = Date.now();
+    const pays = await ctx.db
+      .query("payments")
+      .withIndex("by_reservation", (q) => q.eq("reservationId", id))
+      .collect();
+    for (const p of pays) await ctx.db.patch(p._id, { status: "cancelled", deletedAt: now, updatedAt: now });
+    const why = reason ? ` (${reason.trim().slice(0, 200)})` : "";
+    await ctx.db.patch(id, {
+      status: "cancelled",
+      deletedAt: now,
+      deletedBy: who,
+      notes: `${r.notes ?? ""} · deleted in the admin by ${who}${why}`,
+      updatedAt: now,
+    });
+    return { code: r.code };
+  },
+});
+
+/**
  * One-off backfill: rentals deleted on the quick-add page before soft delete
  * existed carry only a note. Give them `deletedAt` so they join the log.
  */
