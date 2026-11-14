@@ -15,6 +15,7 @@ import type * as config from "../config.js";
 import type * as contract from "../contract.js";
 import type * as crons from "../crons.js";
 import type * as events from "../events.js";
+import type * as lib_autoPay from "../lib/autoPay.js";
 import type * as lib_balance from "../lib/balance.js";
 import type * as lib_events from "../lib/events.js";
 import type * as lib_googleReviews from "../lib/googleReviews.js";
@@ -51,6 +52,7 @@ declare const fullApi: ApiFromModules<{
   contract: typeof contract;
   crons: typeof crons;
   events: typeof events;
+  "lib/autoPay": typeof lib_autoPay;
   "lib/balance": typeof lib_balance;
   "lib/events": typeof lib_events;
   "lib/googleReviews": typeof lib_googleReviews;

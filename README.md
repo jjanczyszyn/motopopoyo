@@ -147,6 +147,26 @@ simple Spanish (for Karen); server errors are mapped to plain Spanish in
   `quick:adminDelete({adminToken, id, reason?})` does the same soft delete from
   the admin side for any rental at any age (all its payments are cancelled and
   flagged), for mistakes found after the partner's 24 hours.
+
+### Website bookings are paid on arrival
+
+Nobody was marking website bookings paid, so `reservations.create` records
+the payment itself (`convex/lib/autoPay.ts`, note "Recorded automatically at
+booking"): the full total, by the method the customer picked, collected by that
+method's `defaultCollector`. Cash is dated midday on the start day (the
+hand-off). Electronic money is dated at booking and gets
+`verification: "unverified"` until it's checked against JJ's own records:
+`payments.toVerify` lists those, and `payments.setVerification` marks one
+`verified` or `mismatch` with a short `verifyRef`. The admin shows ⚠ / ✓ / ✗
+next to the method.
+
+Checking uses JJ's Gmail: Wise ("Money received from <name>") and Revolut
+("<name> sent you …", also the card / Apple Pay page) arrive per customer.
+Venmo, PayPal and Zelle send no per-customer email; they only appear as lump
+payouts into Wise, so those are checked roughly. Nothing from Gmail is stored
+beyond the short `verifyRef`. `reservations.backfillAutoPaid` (internal,
+one-off) applied this to older unpaid website bookings and queued existing
+electronic payments.
 - Same double-booking/maintenance guard as every other booking write; past
   rentals (back-fills) skip it. Helpers and tests: `convex/lib/quick.ts`.
 

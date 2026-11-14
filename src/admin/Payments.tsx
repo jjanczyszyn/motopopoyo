@@ -207,7 +207,7 @@ export function Payments({ adminToken, year, monthIdx0, setYear, setMonth }: Pro
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ fontWeight: 700, fontSize: 16 }}>{fmtUSD(p.amount)}</div>
                     <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>
-                      {p.method} · {p.collectedBy}
+                      {p.method}<VerifyBadge v={p.verification} /> · {p.collectedBy}
                     </div>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
@@ -272,7 +272,7 @@ export function Payments({ adminToken, year, monthIdx0, setYear, setMonth }: Pro
                       </>
                     ) : "—"}
                   </td>
-                  <td style={tdStyle}>{p.method}</td>
+                  <td style={tdStyle}>{p.method}<VerifyBadge v={p.verification} /></td>
                   <td style={tdStyle}><StatusPill status={p.paymentType} /></td>
                   <td style={{ ...tdStyle, textAlign: "right", fontWeight: 600 }}>{fmtUSD(p.amount)}</td>
                   <td style={tdStyle}>{p.collectedBy}</td>
@@ -588,4 +588,14 @@ export function PaymentStatusEditor({
       {PAYMENT_STATUSES.map((s) => (<option key={s} value={s}>{s}</option>))}
     </select>
   );
+}
+
+/** Shows whether an electronic payment was checked against JJ's records. */
+function VerifyBadge({ v }: { v?: "unverified" | "verified" | "mismatch" }) {
+  if (!v) return null;
+  const [txt, title, color] =
+    v === "verified" ? ["✓", "Checked against JJ's payment emails", "#166534"]
+    : v === "mismatch" ? ["✗ check", "Didn't match JJ's payment emails", "#991b1b"]
+    : ["⚠ unverified", "Not yet checked against JJ's payment emails", "#92400e"];
+  return <span title={title} data-testid="verify-badge" style={{ marginLeft: 6, fontSize: 11, fontWeight: 600, color }}>{txt}</span>;
 }

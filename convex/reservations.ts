@@ -6,6 +6,8 @@ import { computeTotal, daysBetweenISO } from "./lib/pricing";
 import { outstanding, payStatusFor, receivedTotal } from "./lib/balance";
 import { assertAdmin, assertAdminRead } from "./admin";
 import { inDeletedView } from "./lib/quick";
+import { AUTO_PAYMENT_NOTE, autoPaymentFor, isElectronic } from "./lib/autoPay";
+import { internalMutation } from "./_generated/server";
 import { DEFAULT_JJ_PCT, DEFAULT_KAREN_PCT } from "./lib/settlement";
 import {
   blockedDays,
@@ -169,6 +171,31 @@ export const create = mutation({
       createdAt: now,
       updatedAt: now,
     });
+
+    // Record it as paid straight away: cash at the hand-off, electronic now
+    // but "unverified" until checked against JJ's payment emails.
+    const methodCfg = cfg?.paymentMethods.find((m) => m.id === input.payMethod);
+    const pay = autoPaymentFor(
+      { payMethod: input.payMethod, startDate: input.startDate, totalUSD },
+      methodCfg?.defaultCollector,
+      now
+    );
+    if (pay.amount > 0) {
+      await ctx.db.insert("payments", {
+        reservationId: id,
+        amount: pay.amount,
+        currency: "USD",
+        method: input.payMethod,
+        collectedBy: pay.collectedBy,
+        paymentType: "full_payment",
+        status: "received",
+        receivedAt: pay.receivedAt,
+        verification: pay.verification,
+        notes: AUTO_PAYMENT_NOTE,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
 
     return { id, code, totalUSD, days };
   },
@@ -547,5 +574,44 @@ export const setStatus = mutation({
   handler: async (ctx, { id, status, adminToken }) => {
     await assertAdmin(ctx, adminToken);
     await ctx.db.patch(id, { status, updatedAt: Date.now() });
+  },
+});
+
+/**
+ * One-off backfill: website bookings that nobody marked paid get the same
+ * automatic payment new bookings get, and electronic payments already on
+ * record are queued for checking.
+ */
+export const backfillAutoPaid = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const cfg = await ctx.db.query("config").first();
+    const now = Date.now();
+    const added: string[] = [];
+    for (const r of await ctx.db.query("reservations").collect()) {
+      if (r.status === "cancelled" || r.deletedAt !== undefined) continue;
+      const pays = await ctx.db
+        .query("payments")
+        .withIndex("by_reservation", (q) => q.eq("reservationId", r._id))
+        .collect();
+      if (pays.length > 0 || r.totalUSD <= 0) continue;
+      const methodCfg = cfg?.paymentMethods.find((m) => m.id === r.payMethod);
+      const pay = autoPaymentFor(r, methodCfg?.defaultCollector, now);
+      await ctx.db.insert("payments", {
+        reservationId: r._id, amount: pay.amount, currency: "USD", method: r.payMethod,
+        collectedBy: pay.collectedBy, paymentType: "full_payment", status: "received",
+        receivedAt: pay.receivedAt, verification: pay.verification, notes: AUTO_PAYMENT_NOTE,
+        createdAt: now, updatedAt: now,
+      });
+      added.push(r.code);
+    }
+    let queued = 0;
+    for (const p of await ctx.db.query("payments").collect()) {
+      if (p.status === "received" && p.verification === undefined && isElectronic(p.method) && p.paymentType !== "refund") {
+        await ctx.db.patch(p._id, { verification: "unverified" });
+        queued++;
+      }
+    }
+    return { added, queued };
   },
 });
