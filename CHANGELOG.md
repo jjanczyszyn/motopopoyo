@@ -17,6 +17,9 @@
   is rotated. (#12)
 
 ### Changed
+- **Admins can soft-delete a mistaken rental after the 24 hours.** It's kept on
+  record like a Borrar from the "New rental" page, with all its payments
+  cancelled, and shows in the Deleted log. (#19)
 - **Deleting a rental on the "New rental" page keeps it for the record.** A
   deleted rental and its payment are no longer erased: they're marked deleted
   and cancelled, hidden from the admin, and left out of every total. Bookings →

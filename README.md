@@ -144,6 +144,9 @@ simple Spanish (for Karen); server errors are mapped to plain Spanish in
   `payments.list` hide deleted rows; `listForAdmin({deleted: true})` returns
   only them, shown in the admin under Bookings → **🗑️ Deleted log**.
   `quick:backfillDeleted` (internal, one-off) flags rentals deleted before this.
+  `quick:adminDelete({adminToken, id, reason?})` does the same soft delete from
+  the admin side for any rental at any age (all its payments are cancelled and
+  flagged), for mistakes found after the partner's 24 hours.
 - Same double-booking/maintenance guard as every other booking write; past
   rentals (back-fills) skip it. Helpers and tests: `convex/lib/quick.ts`.
 
