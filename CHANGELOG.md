@@ -17,6 +17,11 @@
   is rotated. (#12)
 
 ### Changed
+- **Deleting a rental on the "New rental" page keeps it for the record.** A
+  deleted rental and its payment are no longer erased: they're marked deleted
+  and cancelled, hidden from the admin, and left out of every total. Bookings →
+  "🗑️ Deleted log" lists them, with who deleted them and when. Unticking
+  "paid" cancels the payment instead of erasing it. (#18)
 - **Rentals added on the "New rental" page count as paid by default.** The
   "Ya me pagó" box starts ticked, so each saved rental records a cash payment
   collected by Karen. Untick it for a renter who hasn't paid yet. (#16)

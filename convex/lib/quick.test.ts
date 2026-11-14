@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDaysISO, canQuickEdit, isISODate, quickAuthor, statusForDates } from "./quick";
+import { addDaysISO, canQuickEdit, inDeletedView, isISODate, quickAuthor, statusForDates } from "./quick";
 
 describe("addDaysISO", () => {
   it("adds days across month and year ends", () => {
@@ -54,5 +54,20 @@ describe("quickAuthor / canQuickEdit", () => {
     expect(canQuickEdit(mine, "JJ", now)).toBe(false);
     expect(canQuickEdit({ ...mine, notes: "from WhatsApp" }, "Karen", now)).toBe(false);
     expect(canQuickEdit({ ...mine, status: "cancelled" }, "Karen", now)).toBe(false);
+  });
+});
+
+describe("soft delete", () => {
+  const base = { notes: "Added by Karen via quick add", createdAt: 1_000, status: "confirmed" };
+  it("locks a deleted rental even inside the 24 hours", () => {
+    expect(canQuickEdit({ ...base, deletedAt: 2_000 }, "Karen", 3_000)).toBe(false);
+  });
+  it("hides deleted rentals from the normal admin lists", () => {
+    expect(inDeletedView({}, false)).toBe(true);
+    expect(inDeletedView({ deletedAt: 5 }, false)).toBe(false);
+  });
+  it("shows only deleted rentals in the Deleted log", () => {
+    expect(inDeletedView({ deletedAt: 5 }, true)).toBe(true);
+    expect(inDeletedView({}, true)).toBe(false);
   });
 });

@@ -148,6 +148,16 @@ test.describe("signed in", () => {
     await expect(page.getByRole("columnheader", { name: /pay status/i })).toBeVisible();
   });
 
+  test("deleted rentals live in their own log, hidden by default", async ({ page }, testInfo) => {
+    await page.goto("/admin#bookings");
+    // On a phone the toggles sit behind the Filters button.
+    if (testInfo.project.name === "mobile") await page.getByRole("button", { name: /^filters/i }).click();
+    const toggle = page.getByTestId("bookings-deleted-log");
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  });
+
   test("season switch is reachable in settings", async ({ page }) => {
     await page.goto("/admin#settings");
     await expect(page.getByText(/season pricing/i).first()).toBeVisible();
