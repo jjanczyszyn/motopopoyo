@@ -148,6 +148,29 @@ simple Spanish (for Karen); server errors are mapped to plain Spanish in
   the admin side for any rental at any age (all its payments are cancelled and
   flagged), for mistakes found after the partner's 24 hours.
 
+### Services sold on commission
+
+The **Moto / Servicio** switch on `/new` (or `/new#servicio` directly) opens a
+second one-screen form for services we arrange and earn commission on: service
+(chips of names used before, then common ones, or typed), day, what the client
+paid, what it cost, optional client name. The commission (**paid − cost**) shows
+as she types and on the Save button.
+
+- **Table `serviceSales`** (index `by_date`): `serviceName`, `date`, `priceUSD`,
+  `costUSD`, `clientName?`, `addedBy` (Karen / JJ), `deletedAt?`, `deletedBy?`,
+  `createdAt`, `updatedAt`. Commission is never stored, always computed.
+- **Functions** (`convex/services.ts`, all need an admin session): `mine`,
+  `create`, `update`, `remove` (author only, within 24h), `list` and
+  `adminDelete` for the admin. Deletes are soft. Rules and tests:
+  `convex/lib/services.ts`.
+- **Refused:** a future day, a missing name or price, or a cost above the price
+  (usually the two amounts swapped).
+- **Admin → More → Services:** commission, count, charged and cost for the
+  month, all-time totals, the list and a CSV export. Home shows the month's
+  service commission.
+- **Not part of moto revenue or the 70/30 settlement**, see
+  [ADR 0001](docs/adr/0001-service-commissions.md).
+
 ### Website bookings are paid on arrival
 
 Nobody was marking website bookings paid, so `reservations.create` records
@@ -234,14 +257,17 @@ src/
     Home.tsx Calendar.tsx BikePick.tsx OCR.tsx Phone.tsx
     Payment.tsx Contract.tsx Delivery.tsx Done.tsx Admin.tsx
     Quick.tsx                 # /new partner quick-add page (owner login)
+    QuickService.tsx          # /new → Servicio: services sold on commission
+    quickUi.tsx               # shared look of the /new page
   hooks/useReservationDraft.ts
   lib/                        # pure logic with vitest coverage
     pricing.ts dates.ts countries.ts ocrParse.ts phone.ts assets.ts
 convex/
-  schema.ts                   # config / bikes / reservations / reviews
+  schema.ts                   # config / bikes / reservations / serviceSales / reviews
   config.ts bikes.ts reservations.ts reviews.ts
   contract.ts ocr.ts storage.ts crons.ts seed.ts
   quick.ts                    # /new page: me / options / create
+  services.ts                 # services sold on commission
   lib/pricing.ts              # shared with frontend
 public/
   assets/                     # bike photos, logo, helmet, payment brand SVGs

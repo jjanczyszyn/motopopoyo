@@ -198,6 +198,23 @@ export default defineSchema({
     .index("by_month", ["settlementMonth"])
     .index("by_date", ["date"]),
 
+  // Services we sell on commission (massage, pedicure, trips…). Commission is
+  // always priceUSD − costUSD, never stored. Not part of moto revenue or the
+  // partner settlement (docs/adr/0001-service-commissions.md).
+  serviceSales: defineTable({
+    serviceName: v.string(),
+    date: v.string(), // ISO YYYY-MM-DD, the day it happened
+    priceUSD: v.number(), // what the customer was charged
+    costUSD: v.number(), // what the provider was paid
+    clientName: v.optional(v.string()),
+    addedBy: v.union(v.literal("JJ"), v.literal("Karen")),
+    // Soft delete: kept for the record, hidden and counted nowhere.
+    deletedAt: v.optional(v.number()),
+    deletedBy: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_date", ["date"]),
+
   // Maintenance/blocked days that aren't tied to a booking. Booking-driven
   // unavailability is computed from reservations themselves at query time.
   motorcycleAvailability: defineTable({

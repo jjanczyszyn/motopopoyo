@@ -3,6 +3,14 @@
 ## Unreleased
 
 ### Added
+- **Log services we earn commission on.** The "New rental" page
+  (`moto.popoyo.co/new`) has a **Moto / Servicio** switch. Under Servicio, Karen
+  taps or types the service (massage, pedicure…), what the client paid and what
+  it cost, and sees the commission before saving. She can change or delete it
+  for 24 hours, like rentals. The admin has a new **Services** tab with monthly
+  and all-time commission, a list and a CSV export, and Home shows the month's
+  service commission. Commission is kept apart from moto revenue and the
+  partner settlement. (#21)
 - **Karen can change or delete her rentals for 24 hours.** The "New rental"
   page lists the rentals she added in the last 24 hours under "✏️ Tus motos".
   "Cambiar" reopens one to fix the moto, dates, price, name or paid. "Borrar"
