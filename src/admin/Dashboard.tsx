@@ -140,6 +140,8 @@ export function Dashboard({ adminToken, year, monthIdx0, setYear, setMonth }: Pr
   // No settlementMonth = every payment ever received.
   const allTime = useQuery(api.settlement.summary, { adminToken });
 
+  const services = useQuery(api.services.list, { adminToken, fromISO: start, toISO: end });
+
   const trailing = monthly
     ? monthly.slice(Math.max(0, monthIdx0 - 5), monthIdx0 + 1)
     : [];
@@ -175,6 +177,8 @@ export function Dashboard({ adminToken, year, monthIdx0, setYear, setMonth }: Pr
           sub={dash ? `${dash.availableBikeDays} bike-days available` : "Loading…"} />
         <StatCard label="Average daily rate" value={fmtUSD(dash?.avgDailyRate ?? null)}
           sub={dash?.rentalDaysSold ? `${dash.rentalDaysSold} days @ avg` : "No rentals"} />
+        <StatCard label="Service commission" value={fmtUSD(services?.totals.commissionUSD ?? 0)}
+          sub={services ? `${services.totals.count} services, apart from revenue` : "Loading…"} />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))", gap: 12 }}>

@@ -6,56 +6,40 @@ import { errorText } from "../lib/convexError";
 import { track } from "../lib/telemetry";
 import { spanishError } from "../lib/quickText";
 import { LoginGate, useAdminAuth } from "./Admin";
+import { QuickServiceForm } from "./QuickService";
+import {
+  ModeSwitch, MoneyField, type QuickMode, addDays, bigBtn, chip, field, label, linkBtn, nice, page, wrap,
+} from "./quickUi";
 
 // /new — the partner's one-screen "log a rental" page, behind the same
 // owner login as /admin (same session, so signing in on one signs in both).
-// Pick a bike, pick the days, check the price, save. Nothing else.
+// Pick a bike, pick the days, check the price, save. "Servicio" at the top
+// switches to logging a service sold on commission (QuickService.tsx).
 
 const DAY_CHIPS = [1, 2, 3, 5, 7, 14, 30];
 
-function addDays(iso: string, n: number): string {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
-}
-
-function nice(iso: string): string {
-  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("es-NI", {
-    weekday: "short", day: "numeric", month: "short", timeZone: "UTC",
-  });
-}
-
-const page: React.CSSProperties = {
-  height: "100%", overflowY: "auto", overflowX: "hidden", background: "#fafafa",
-  WebkitOverflowScrolling: "touch",
-};
-const wrap: React.CSSProperties = { maxWidth: 480, margin: "0 auto", padding: "16px 16px 120px" };
-const label: React.CSSProperties = {
-  fontSize: 13, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase",
-  letterSpacing: 0.6, margin: "22px 0 10px",
-};
-const chip = (on: boolean): React.CSSProperties => ({
-  minHeight: 48, minWidth: 48, padding: "0 16px", borderRadius: 999, fontSize: 16, fontWeight: 600,
-  border: on ? "2px solid var(--ink)" : "1px solid var(--line)",
-  background: on ? "var(--ink)" : "#fff", color: on ? "#fff" : "var(--ink)",
-});
-const field: React.CSSProperties = {
-  width: "100%", boxSizing: "border-box", minHeight: 52, padding: "0 14px", fontSize: 17,
-  borderRadius: 14, border: "1px solid var(--line)", background: "#fff", color: "var(--ink)",
-};
-
 export function QuickScreen() {
   const { authed, token, tryPassword, logout } = useAdminAuth();
+  // /new#servicio opens straight on the service form.
+  const [mode, setMode] = React.useState<QuickMode>(() =>
+    window.location.hash === "#servicio" ? "service" : "moto"
+  );
   const me = useQuery(api.quick.me, authed && token ? { adminToken: token } : "skip");
 
   if (!authed || !token) {
     return <div className="admin-root" style={page}><LoginGate onSubmit={tryPassword} lang="es" /></div>;
   }
   if (me === undefined) return <div style={page}><div style={wrap}><p>Cargando…</p></div></div>;
-  return <QuickForm token={token} who={me.who} today={me.today} onLogout={logout} />;
+  const props = {
+    token, who: me.who, today: me.today, onLogout: logout,
+    top: <ModeSwitch mode={mode} setMode={setMode} />,
+  };
+  return mode === "service" ? <QuickServiceForm {...props} /> : <QuickForm {...props} />;
 }
 
-function QuickForm({ token, who, today, onLogout }: { token: string; who: string; today: string; onLogout: () => void }) {
+function QuickForm({
+  token, who, today, onLogout, top,
+}: { token: string; who: string; today: string; onLogout: () => void; top: React.ReactNode }) {
   const [start, setStart] = React.useState(today);
   const [days, setDays] = React.useState(1);
   const [bikeId, setBikeId] = React.useState<Id<"bikes"> | null>(null);
@@ -189,6 +173,7 @@ function QuickForm({ token, who, today, onLogout }: { token: string; who: string
   return (
     <div style={page} lang="es">
       <div style={wrap} id="quick-top">
+        {!editId && top}
         <h1 style={{ fontSize: 26, margin: "4px 0 2px" }}>{editId ? "✏️ Cambiar moto alquilada" : "🛵 Nueva moto alquilada"}</h1>
         <div style={{ fontSize: 14, color: "var(--muted)" }}>
           Hola {who} 👋 · <button onClick={onLogout} style={linkBtn}>Salir</button>
@@ -258,14 +243,7 @@ function QuickForm({ token, who, today, onLogout }: { token: string; who: string
         )}
 
         <div style={label}>💵 ¿Cuánto paga? (dólares)</div>
-        <div style={{ position: "relative" }}>
-          <span style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)", fontSize: 22, fontWeight: 700 }}>$</span>
-          <input
-            inputMode="decimal" aria-label="Precio en dólares" value={price}
-            onChange={(e) => { setPrice(e.target.value); setPriceTouched(true); }}
-            style={{ ...field, paddingLeft: 36, fontSize: 24, fontWeight: 700, minHeight: 60 }}
-          />
-        </div>
+        <MoneyField ariaLabel="Precio en dólares" value={price} onChange={(p) => { setPrice(p); setPriceTouched(true); }} />
         <div style={{ fontSize: 14, color: "var(--muted)", marginTop: 6 }}>
           {listPrice !== undefined && (
             priceTouched && priceNum !== listPrice
@@ -341,11 +319,3 @@ function QuickForm({ token, who, today, onLogout }: { token: string; who: string
     </div>
   );
 }
-
-const bigBtn: React.CSSProperties = {
-  width: "100%", minHeight: 58, borderRadius: 16, border: "none", fontSize: 18, fontWeight: 700,
-  background: "var(--accent)", color: "var(--accent-ink)",
-};
-const linkBtn: React.CSSProperties = {
-  border: "none", background: "none", padding: "0 4px", color: "var(--ink)", textDecoration: "underline", fontSize: 14,
-};

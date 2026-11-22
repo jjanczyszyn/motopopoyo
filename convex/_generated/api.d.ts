@@ -24,6 +24,7 @@ import type * as lib_pricing from "../lib/pricing.js";
 import type * as lib_quick from "../lib/quick.js";
 import type * as lib_report from "../lib/report.js";
 import type * as lib_season from "../lib/season.js";
+import type * as lib_services from "../lib/services.js";
 import type * as lib_settlement from "../lib/settlement.js";
 import type * as metrics from "../metrics.js";
 import type * as ocr from "../ocr.js";
@@ -35,6 +36,7 @@ import type * as reportSend from "../reportSend.js";
 import type * as reservations from "../reservations.js";
 import type * as reviews from "../reviews.js";
 import type * as seed from "../seed.js";
+import type * as services from "../services.js";
 import type * as settlement from "../settlement.js";
 import type * as storage from "../storage.js";
 
@@ -61,6 +63,7 @@ declare const fullApi: ApiFromModules<{
   "lib/quick": typeof lib_quick;
   "lib/report": typeof lib_report;
   "lib/season": typeof lib_season;
+  "lib/services": typeof lib_services;
   "lib/settlement": typeof lib_settlement;
   metrics: typeof metrics;
   ocr: typeof ocr;
@@ -72,6 +75,7 @@ declare const fullApi: ApiFromModules<{
   reservations: typeof reservations;
   reviews: typeof reviews;
   seed: typeof seed;
+  services: typeof services;
   settlement: typeof settlement;
   storage: typeof storage;
 }>;

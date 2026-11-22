@@ -8,6 +8,7 @@ import { Motorcycles } from "../admin/Motorcycles";
 import { Revenue } from "../admin/Revenue";
 import { Payments } from "../admin/Payments";
 import { Seasonality } from "../admin/Seasonality";
+import { Services } from "../admin/Services";
 import { Settlement } from "../admin/Settlement";
 import { Reports } from "../admin/Reports";
 import { Settings } from "../admin/Settings";
@@ -246,7 +247,7 @@ export function LoginGate({
 }
 
 const TABS = [
-  "dashboard", "bookings", "motorcycles", "revenue", "payments",
+  "dashboard", "bookings", "motorcycles", "services", "revenue", "payments",
   "seasonality", "settlement", "reports", "activity", "settings",
 ] as const;
 type Tab = typeof TABS[number];
@@ -255,6 +256,7 @@ const TAB_LABELS: Record<Tab, string> = {
   dashboard: "Dashboard",
   bookings: "Bookings",
   motorcycles: "Motorcycles",
+  services: "Services",
   revenue: "Revenue",
   payments: "Payments",
   seasonality: "Seasonality",
@@ -282,6 +284,7 @@ const TAB_ICONS: Record<Tab, string> = {
   bookings: "▤",
   payments: "$",
   motorcycles: "◍",
+  services: "✦",
   revenue: "◔",
   seasonality: "▦",
   activity: "⚑",
@@ -426,6 +429,7 @@ export function AdminScreen() {
     case "dashboard":   inner = <Dashboard {...sectionProps} />; break;
     case "bookings":    inner = <Bookings adminToken={token} />; break;
     case "motorcycles": inner = <Motorcycles adminToken={token} />; break;
+    case "services":    inner = <Services {...sectionProps} />; break;
     case "revenue":     inner = <Revenue adminToken={token} year={year} setYear={setYear} />; break;
     case "payments":    inner = <Payments {...sectionProps} />; break;
     case "seasonality": inner = <Seasonality adminToken={token} year={year} setYear={setYear} />; break;

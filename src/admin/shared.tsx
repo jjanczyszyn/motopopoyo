@@ -28,6 +28,13 @@ export const fmtDate = (iso: string | undefined): string => {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 };
 
+// A calendar day ('YYYY-MM-DD'), the same in every timezone. fmtDate reads such
+// a value as UTC midnight, which is the evening before in Nicaragua.
+export const fmtDay = (iso: string): string =>
+  new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", {
+    month: "short", day: "numeric", year: "numeric", timeZone: "UTC",
+  });
+
 export const monthLabels = [
   "Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec",
 ];

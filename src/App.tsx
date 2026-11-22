@@ -36,7 +36,7 @@ export default function App() {
   const isAdmin =
     /\/admin\/?$/.test(path) || window.location.hash === "#/admin";
   if (isAdmin) return <AdminScreen />;
-  // Partner quick-add page: /new#t=<secret>.
+  // Partner quick-add page: rentals, and services sold on commission.
   if (/\/new\/?$/.test(path)) return <QuickScreen />;
   return <RentalFlow />;
 }

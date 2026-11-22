@@ -21,12 +21,12 @@ import { assertBikeFree, genCode } from "./reservations";
 // every call needs a live admin session token, and the booking is credited
 // to whoever is signed in.
 
-function whoFor(username: string | undefined): "Karen" | "JJ" {
+export function whoFor(username: string | undefined): "Karen" | "JJ" {
   return username === "karen" ? "Karen" : "JJ";
 }
 
 /** Today in Popoyo (UTC-6, no DST). */
-function todayNicaragua(): string {
+export function todayNicaragua(): string {
   return new Date(Date.now() - 6 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
