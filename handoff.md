@@ -1,4 +1,4 @@
-# Session handoff — 2026-11-13 00:00 UTC
+# Session handoff — 2026-11-22 22:28 UTC
 
 ## What this is
 
@@ -55,6 +55,19 @@ git, dev-vs-prod Convex split). Hand-made prod data changes are logged in
 - **Dashboard leads with all-time figures**: total revenue, each partner's
   earnings and share %, what each collected, and the balance between them,
   tapping through to Partner settlement.
+
+## Shipped 2026-11-22 (PR #21)
+
+- **Services sold on commission.** `/new` has a Moto / Servicio switch; admin →
+  More → Services has totals, list and CSV. Table `serviceSales`,
+  `convex/services.ts`, [ADR 0001](docs/adr/0001-service-commissions.md).
+  Live on prod. Not part of moto revenue or the 70/30 settlement.
+- **Waiting on the owners:** is commission split between JJ and Karen, and how?
+- **Known bug, not fixed:** `fmtDate` / `fmtDateShort` (`src/admin/shared.tsx`)
+  show date-only values one day early west of UTC, so Bookings and Payments show
+  rental dates a day early in Nicaragua (display only). `fmtDay` is the correct one.
+- `ci-local` reported the e2e job as not affected and didn't run it on #21; wait
+  for GitHub's own e2e check (Actions works here, the repo is public).
 
 ## Shipped 2026-11-12 (PRs #12–#14)
 
