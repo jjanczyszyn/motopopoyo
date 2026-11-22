@@ -142,6 +142,8 @@ export function Dashboard({ adminToken, year, monthIdx0, setYear, setMonth }: Pr
 
   const services = useQuery(api.services.list, { adminToken, fromISO: start, toISO: end });
 
+  const reviews = useQuery(api.beautyReviews.list, { adminToken });
+
   const trailing = monthly
     ? monthly.slice(Math.max(0, monthIdx0 - 5), monthIdx0 + 1)
     : [];
@@ -149,6 +151,14 @@ export function Dashboard({ adminToken, year, monthIdx0, setYear, setMonth }: Pr
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {!!reviews?.pending && (
+        <button
+          onClick={() => { window.location.hash = "reviews"; }}
+          style={{ ...cardStyle, textAlign: "left", background: "#fff7ed", borderColor: "#f59e0b", fontSize: 15, fontWeight: 600 }}
+        >
+          ★ {reviews.pending} beauty review{reviews.pending === 1 ? "" : "s"} to check →
+        </button>
+      )}
       <AllTimeCard summary={allTime} />
 
       <header style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>

@@ -215,6 +215,21 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_date", ["date"]),
 
+  // Customer reviews left on beauty.popoyo.co/review. Shown there only once
+  // published by an owner (docs/adr/0002-beauty-reviews.md).
+  beautyReviews: defineTable({
+    name: v.string(),
+    rating: v.number(), // 1 to 5
+    text: v.string(),
+    service: v.optional(v.string()),
+    status: v.union(v.literal("pending"), v.literal("published"), v.literal("hidden")),
+    reviewedBy: v.optional(v.string()),
+    reviewedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_status", ["status"])
+    .index("by_createdAt", ["createdAt"]),
+
   // Maintenance/blocked days that aren't tied to a booking. Booking-driven
   // unavailability is computed from reservations themselves at query time.
   motorcycleAvailability: defineTable({

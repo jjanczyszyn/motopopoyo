@@ -8,6 +8,7 @@ import { Motorcycles } from "../admin/Motorcycles";
 import { Revenue } from "../admin/Revenue";
 import { Payments } from "../admin/Payments";
 import { Seasonality } from "../admin/Seasonality";
+import { BeautyReviews } from "../admin/BeautyReviews";
 import { Services } from "../admin/Services";
 import { Settlement } from "../admin/Settlement";
 import { Reports } from "../admin/Reports";
@@ -247,7 +248,7 @@ export function LoginGate({
 }
 
 const TABS = [
-  "dashboard", "bookings", "motorcycles", "services", "revenue", "payments",
+  "dashboard", "bookings", "motorcycles", "services", "reviews", "revenue", "payments",
   "seasonality", "settlement", "reports", "activity", "settings",
 ] as const;
 type Tab = typeof TABS[number];
@@ -257,6 +258,7 @@ const TAB_LABELS: Record<Tab, string> = {
   bookings: "Bookings",
   motorcycles: "Motorcycles",
   services: "Services",
+  reviews: "Beauty reviews",
   revenue: "Revenue",
   payments: "Payments",
   seasonality: "Seasonality",
@@ -276,6 +278,7 @@ const SHORT_LABELS: Partial<Record<Tab, string>> = {
   dashboard: "Home",
   motorcycles: "Motos",
   settlement: "Settlement",
+  reviews: "Reviews",
 };
 const shortLabel = (t: Tab) => SHORT_LABELS[t] ?? TAB_LABELS[t];
 
@@ -285,6 +288,7 @@ const TAB_ICONS: Record<Tab, string> = {
   payments: "$",
   motorcycles: "◍",
   services: "✦",
+  reviews: "★",
   revenue: "◔",
   seasonality: "▦",
   activity: "⚑",
@@ -430,6 +434,7 @@ export function AdminScreen() {
     case "bookings":    inner = <Bookings adminToken={token} />; break;
     case "motorcycles": inner = <Motorcycles adminToken={token} />; break;
     case "services":    inner = <Services {...sectionProps} />; break;
+    case "reviews":     inner = <BeautyReviews adminToken={token} />; break;
     case "revenue":     inner = <Revenue adminToken={token} year={year} setYear={setYear} />; break;
     case "payments":    inner = <Payments {...sectionProps} />; break;
     case "seasonality": inner = <Seasonality adminToken={token} year={year} setYear={setYear} />; break;

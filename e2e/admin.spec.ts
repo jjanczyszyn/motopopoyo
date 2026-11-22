@@ -90,7 +90,7 @@ test.describe("signed in", () => {
   });
 
   test("every section renders without horizontal overflow", async ({ page }) => {
-    for (const section of ["dashboard", "bookings", "payments", "motorcycles", "services", "settings"]) {
+    for (const section of ["dashboard", "bookings", "payments", "motorcycles", "services", "reviews", "settings"]) {
       await page.goto(`/admin#${section}`);
       await page.waitForTimeout(600);
       const overflow = await page.evaluate(
@@ -147,6 +147,11 @@ test.describe("signed in", () => {
     await expect(page.getByText(/not included in moto revenue/i)).toBeVisible();
     await expect(page.getByText("Commission", { exact: true }).first()).toBeVisible();
     await expect(page.getByRole("link", { name: /add service/i })).toHaveAttribute("href", "/new#servicio");
+  });
+
+  test("beauty reviews tab explains what to publish", async ({ page }) => {
+    await page.goto("/admin#reviews");
+    await expect(page.getByText(/publish every real review/i)).toBeVisible();
   });
 
   test("bookings show pay status by default", async ({ page }, testInfo) => {

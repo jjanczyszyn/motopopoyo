@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- **Beauty reviews.** Customers of Popoyo Beauty can leave a review at
+  `beauty.popoyo.co/review`. New reviews wait under admin → More → **Beauty
+  reviews**, where an owner publishes or hides each one; Home shows how many are
+  waiting. The customer's words and stars can't be edited. (#23)
 - **Log services we earn commission on.** The "New rental" page
   (`moto.popoyo.co/new`) has a **Moto / Servicio** switch. Under Servicio, Karen
   taps or types the service (massage, pedicure…), what the client paid and what

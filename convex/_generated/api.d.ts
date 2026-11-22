@@ -10,6 +10,7 @@
 
 import type * as admin from "../admin.js";
 import type * as availability from "../availability.js";
+import type * as beautyReviews from "../beautyReviews.js";
 import type * as bikes from "../bikes.js";
 import type * as config from "../config.js";
 import type * as contract from "../contract.js";
@@ -17,6 +18,7 @@ import type * as crons from "../crons.js";
 import type * as events from "../events.js";
 import type * as lib_autoPay from "../lib/autoPay.js";
 import type * as lib_balance from "../lib/balance.js";
+import type * as lib_beautyReviews from "../lib/beautyReviews.js";
 import type * as lib_events from "../lib/events.js";
 import type * as lib_googleReviews from "../lib/googleReviews.js";
 import type * as lib_integrity from "../lib/integrity.js";
@@ -49,6 +51,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   availability: typeof availability;
+  beautyReviews: typeof beautyReviews;
   bikes: typeof bikes;
   config: typeof config;
   contract: typeof contract;
@@ -56,6 +59,7 @@ declare const fullApi: ApiFromModules<{
   events: typeof events;
   "lib/autoPay": typeof lib_autoPay;
   "lib/balance": typeof lib_balance;
+  "lib/beautyReviews": typeof lib_beautyReviews;
   "lib/events": typeof lib_events;
   "lib/googleReviews": typeof lib_googleReviews;
   "lib/integrity": typeof lib_integrity;
