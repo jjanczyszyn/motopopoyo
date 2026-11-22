@@ -51,6 +51,20 @@ test("public API refuses quick-add calls without an admin session", async () => 
   await expect(client.mutation(anyApi.services.update, { adminToken: bad, id: fakeRes, ...service })).rejects.toThrow();
   await expect(client.mutation(anyApi.services.remove, { adminToken: bad, id: fakeRes })).rejects.toThrow();
   await expect(client.mutation(anyApi.services.adminDelete, { adminToken: bad, id: fakeRes })).rejects.toThrow();
+  // Beauty reviews: reading the queue and publishing need a session too.
+  await expect(client.query(anyApi.beautyReviews.list, { adminToken: bad })).rejects.toThrow(denied);
+  await expect(
+    client.mutation(anyApi.beautyReviews.setStatus, { adminToken: bad, id: fakeRes, status: "published" })
+  ).rejects.toThrow();
+  // Leaving one is public, but a bad one is refused (so nothing is written),
+  // and the public list never shows who approved what.
+  await expect(
+    client.mutation(anyApi.beautyReviews.submit, { name: "", rating: 9, text: "" })
+  ).rejects.toThrow();
+  for (const r of await client.query(anyApi.beautyReviews.published, {})) {
+    expect(Object.keys(r)).not.toContain("status");
+    expect(Object.keys(r)).not.toContain("reviewedBy");
+  }
   await expect(client.query(anyApi.payments.toVerify, { adminToken: bad })).rejects.toThrow();
 });
 

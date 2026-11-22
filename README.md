@@ -171,6 +171,16 @@ as she types and on the Save button.
 - **Not part of moto revenue or the 70/30 settlement**, see
   [ADR 0001](docs/adr/0001-service-commissions.md).
 
+### Beauty reviews
+
+`beauty.popoyo.co/review` (repo `beautypopoyo`) posts reviews to this backend:
+table `beautyReviews` (`name`, `rating` 1–5, `text`, `service?`, `status`
+pending / published / hidden, `reviewedBy?`, `reviewedAt?`, `createdAt`; indexes
+`by_status`, `by_createdAt`). `convex/beautyReviews.ts`: public `submit` (hidden
+bot field, at most 30 a day) and `published`; `list` and `setStatus` need an
+admin session. Owners publish or hide them in admin → More → Beauty reviews.
+See [ADR 0002](docs/adr/0002-beauty-reviews.md).
+
 ### Website bookings are paid on arrival
 
 Nobody was marking website bookings paid, so `reservations.create` records
@@ -263,7 +273,7 @@ src/
   lib/                        # pure logic with vitest coverage
     pricing.ts dates.ts countries.ts ocrParse.ts phone.ts assets.ts
 convex/
-  schema.ts                   # config / bikes / reservations / serviceSales / reviews
+  schema.ts                   # config / bikes / reservations / serviceSales / beautyReviews / reviews
   config.ts bikes.ts reservations.ts reviews.ts
   contract.ts ocr.ts storage.ts crons.ts seed.ts
   quick.ts                    # /new page: me / options / create
